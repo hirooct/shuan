@@ -73,10 +73,9 @@ function getWeekPlan(week) {
     }
     result.dates.push(dateStr);
 
-    // 行事予定 (11-12行目)
-    const eventRow1 = values[10][currentCol] ? String(values[10][currentCol]).trim() : "";
-    const eventRow2 = values[11][currentCol] ? String(values[11][currentCol]).trim() : "";
-    result.event.push(eventRow1 && eventRow2 ? eventRow1 + "\n" + eventRow2 : eventRow1 || eventRow2);
+    // 行事予定（11行目）。12行目は朝の予定なので混在させない
+    const eventValue = values[10][currentCol] ? String(values[10][currentCol]).trim() : "";
+    result.event.push(eventValue);
 
     // 教科 (正しい行位置)
     result.p1.push(values[12][currentCol] ? String(values[12][currentCol]) : ""); // 13
