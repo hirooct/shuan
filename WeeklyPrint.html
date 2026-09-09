@@ -260,6 +260,7 @@
     let isDirty = false;
     let productivitySettings = {patterns:[], phrases:[]};
     let draftTimer = null;
+    let lastEditableElement = null;
 
     function setDirty(dirty) {
       isDirty = dirty;
@@ -457,6 +458,13 @@
       }).getSlideUrl(); 
 
       google.script.run.withSuccessHandler(function(data) { productivitySettings = data || productivitySettings; }).getProductivitySettings();
+      // ツールバーボタンを押しても、直前に選んだ週案の入力欄を見失わないようにする。
+      document.addEventListener('focusin', function(event) {
+        const el = event.target;
+        if (el && el.closest && el.closest('#timetableBody') && /^(INPUT|TEXTAREA)$/.test(el.tagName) && !el.readOnly && !el.disabled) {
+          lastEditableElement = el;
+        }
+      });
       for (let p=1;p<=6;p++) ['toolSourceStart','toolSourceEnd','toolTargetStart'].forEach(function(id) {
         const el=document.getElementById(id); if(el.options.length<6) el.add(new Option(p+'時間目',p));
       });
@@ -621,11 +629,14 @@
     }
 
     function insertQuickPhrase(){
-      const active=document.activeElement;
+      const current=document.activeElement;
+      let active=(current && current.closest && current.closest('#timetableBody') && /^(INPUT|TEXTAREA)$/.test(current.tagName))
+        ? current : lastEditableElement;
+      if(active && !document.body.contains(active)) { lastEditableElement=null; active=null; }
       if(!active || !/^(INPUT|TEXTAREA)$/.test(active.tagName)){alert('先に、定型文を入れたい入力欄をクリックしてください。');return;}
       const items=productivitySettings.phrases||[]; if(!items.length){alert('設定ページで定型文を登録してください。');return;}
       const menu=items.map((x,i)=>(i+1)+'：'+x.name).join('\n'); const n=Number(prompt('入れる定型文の番号を入力してください。\n'+menu));
-      if(!n||!items[n-1])return; active.value+=(active.value?'\n':'')+items[n-1].text; setDirty(true); adjustFontSize(active);
+      if(!n||!items[n-1])return; active.value+=(active.value?'\n':'')+items[n-1].text; lastEditableElement=active; active.focus(); setDirty(true); adjustFontSize(active);
     }
 
     function validateWeekly(data){
