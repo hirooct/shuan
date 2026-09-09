@@ -94,7 +94,12 @@
   </head>
   <body>
     <div class="menu-card">
-      <h1>学級経営ツールメニュー</h1>
+      <h1><?= appName ?></h1>
+      <? if (schoolName || className || teacherName) { ?>
+        <p style="margin:-16px 0 24px;color:#64748b;font-size:13px;">
+          <?= [schoolName, className, teacherName].filter(Boolean).join('　') ?>
+        </p>
+      <? } ?>
       <a href="<?= getScriptUrl(); ?>?p=WeeklyPrint" class="btn btn-shuan">📅 週案ページ</a>
       <a href="<?= getScriptUrl(); ?>?p=tsushin" class="btn btn-tsushin">✉️ 学級通信ページ</a>
       <a href="<?= getScriptUrl(); ?>?p=setting" class="btn btn-setting">⚙️ 設定ページ</a>
