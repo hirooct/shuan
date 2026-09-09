@@ -51,6 +51,13 @@
       .danger-zone h2 { color: #991b1b; background: #fee2e2; margin-top: 0; }
       .btn-reset { background: #b91c1c; color: white; border: none; border-radius: 6px; padding: 10px 16px; cursor: pointer; font-weight: bold; }
       .event-empty { color: #64748b; text-align: center; padding: 16px; }
+      .feature-panel { border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-top:12px; background:#fff; }
+      .feature-panel textarea { width:100%; min-height:100px; box-sizing:border-box; padding:8px; }
+      .feature-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+      .btn-feature { background:#0f766e;color:white;border:0;border-radius:6px;padding:9px 12px;cursor:pointer;font-weight:bold; }
+      .wizard-step { display:none; }
+      .wizard-step.active { display:block; }
+      @media(max-width:700px){ body{padding:5px}.container{padding:14px}.row{display:block}.field{margin-bottom:12px}.feature-actions button{flex:1 1 45%} }
       
       #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; font-weight: bold; color: #475569; font-size: 16px; text-align: center; padding: 20px; box-sizing: border-box; }
       .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 10px; }
@@ -147,6 +154,11 @@
         <thead><tr><th>種別</th><th>日付</th><th>名称</th><th style="width:130px;">操作</th></tr></thead>
         <tbody><tr><td colspan="4" class="event-empty">読み込み中...</td></tr></tbody>
       </table>
+      <div class="feature-panel">
+        <label>一括登録（1行につき「種別,日付,名称」／種別省略時は行事）</label>
+        <textarea id="bulkEntries" placeholder="行事,2026-10-01,運動会\n休日,2026-10-12,振替休業日"></textarea>
+        <div class="feature-actions"><button type="button" class="btn-feature" onclick="runBulkEntries()">内容を確認して一括登録</button></div>
+      </div>
 
       <h2>📅 長期休暇設定 (M2:P4)</h2>
       <table id="vacationTable">
@@ -186,6 +198,38 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+
+      <h2>🧭 初回設定ウィザード</h2>
+      <div class="feature-panel" id="wizardPanel">
+        <div id="wizardText">上から順に、基本情報 → 年度・祝日 → 時間割・リスト → スライド → 設定チェックを進めます。</div>
+        <div class="feature-actions"><button type="button" class="btn-feature" onclick="wizardNext()">次に設定する場所へ</button><button type="button" class="btn-feature" onclick="finishWizard()">設定チェックして完了</button></div>
+      </div>
+
+      <h2>📰 学級通信へ反映する項目</h2>
+      <div class="feature-panel" id="tsushinFields">
+        <label><input type="checkbox" value="event" style="width:auto"> 行事</label>
+        <label><input type="checkbox" value="timetable" style="width:auto"> 時間割</label>
+        <label><input type="checkbox" value="dismissal" style="width:auto"> 下校時刻</label>
+        <label><input type="checkbox" value="homework" style="width:auto"> 宿題</label>
+        <label><input type="checkbox" value="lunchDuty" style="width:auto"> 給食当番</label>
+      </div>
+
+      <h2>🔁 時間割変更パターン</h2>
+      <div class="feature-panel">
+        <p style="font-size:12px">週案でよく使う「月曜2〜5時間目を1〜4時間目へ」などを登録できます。</p>
+        <div id="patternList"></div>
+        <div class="feature-actions"><button type="button" class="btn-feature" onclick="addPatternRow()">パターンを追加</button></div>
+      </div>
+
+      <h2>✍️ 定型文</h2>
+      <div class="feature-panel"><div id="phraseList"></div><div class="feature-actions"><button type="button" class="btn-feature" onclick="addPhraseRow()">定型文を追加</button></div></div>
+
+      <h2>🛡️ バックアップ・復元</h2>
+      <div class="feature-panel">
+        <p style="font-size:12px">スプレッドシート全体を自分のドライブへコピーします。復元前にも自動バックアップします。</p>
+        <div class="feature-actions"><button type="button" class="btn-feature" onclick="createBackupNow()">今すぐバックアップ</button><button type="button" class="btn-feature" onclick="loadBackups()">一覧を更新</button></div>
+        <div id="backupList" style="margin-top:10px"></div>
       </div>
 
       <div class="btn-area">
@@ -339,6 +383,8 @@
           document.getElementById('loading').style.display = 'none';
           loadSystemStatus();
           loadConfigEntries();
+          loadProductivitySettings();
+          loadBackups();
 
         } catch (jsError) {
           showError("表示構築エラー: " + jsError.message);
@@ -527,6 +573,21 @@
           .copySlideTemplate(sourceUrl);
       }
 
+      var productivityData={patterns:[],phrases:[],tsushinFields:{},wizardDone:false};
+      function loadProductivitySettings(){google.script.run.withSuccessHandler(function(data){productivityData=data||productivityData;renderPatterns();renderPhrases();document.querySelectorAll('#tsushinFields input').forEach(function(el){el.checked=productivityData.tsushinFields[el.value]!==false;});}).getProductivitySettings();}
+      function renderPatterns(){var box=document.getElementById('patternList');box.innerHTML='';(productivityData.patterns||[]).forEach(addPatternRow);}
+      function addPatternRow(item){item=item||{name:'',sourceDay:0,sourceStart:1,sourceEnd:6,targetStart:1,overwrite:true};var d=document.createElement('div');d.className='row pattern-row';d.innerHTML='<input class="pat-name" placeholder="名称" value="'+escapeHtml(item.name)+'"><select class="pat-day">'+['月','火','水','木','金'].map(function(x,i){return '<option value="'+i+'" '+(i==item.sourceDay?'selected':'')+'>'+x+'曜</option>';}).join('')+'</select><input class="pat-from" type="number" min="1" max="6" value="'+item.sourceStart+'"><span>〜</span><input class="pat-to" type="number" min="1" max="6" value="'+item.sourceEnd+'"><span>→</span><input class="pat-target" type="number" min="1" max="6" value="'+item.targetStart+'"><button type="button" class="btn-small btn-delete" onclick="this.parentElement.remove()">削除</button>';document.getElementById('patternList').appendChild(d);}
+      function renderPhrases(){var box=document.getElementById('phraseList');box.innerHTML='';(productivityData.phrases||[]).forEach(addPhraseRow);}
+      function addPhraseRow(item){item=item||{name:'',text:''};var d=document.createElement('div');d.className='row phrase-row';d.innerHTML='<input class="phrase-name" placeholder="名称" value="'+escapeHtml(item.name)+'"><textarea class="phrase-text" placeholder="本文" style="min-height:55px">'+escapeHtml(item.text)+'</textarea><button type="button" class="btn-small btn-delete" onclick="this.parentElement.remove()">削除</button>';document.getElementById('phraseList').appendChild(d);}
+      function collectProductivity(){return {patterns:Array.from(document.querySelectorAll('.pattern-row')).map(function(r){return{name:r.querySelector('.pat-name').value,sourceDay:+r.querySelector('.pat-day').value,sourceStart:+r.querySelector('.pat-from').value,sourceEnd:+r.querySelector('.pat-to').value,targetStart:+r.querySelector('.pat-target').value,overwrite:true};}),phrases:Array.from(document.querySelectorAll('.phrase-row')).map(function(r){return{name:r.querySelector('.phrase-name').value,text:r.querySelector('.phrase-text').value};}),tsushinFields:Array.from(document.querySelectorAll('#tsushinFields input')).reduce(function(o,e){o[e.value]=e.checked;return o;},{}),wizardDone:productivityData.wizardDone};}
+      function saveProductivity(done){google.script.run.withSuccessHandler(function(r){if(done)done(r);}).saveProductivitySettings(collectProductivity());}
+      function runBulkEntries(){var text=document.getElementById('bulkEntries').value.trim();if(!text)return alert('登録内容を入力してください。');if(!confirm('入力した行事・休日を一括登録しますか？'))return;google.script.run.withSuccessHandler(function(r){alert(r.message||r.error);if(r.errors&&r.errors.length)alert(r.errors.join('\n'));loadConfigEntries();}).bulkAddConfigEntries(text);}
+      var wizardStep=0;function wizardNext(){var ids=['appName','nendo','timetable','slideUrl','statusSummary'];var labels=['学校・学級の基本情報','年度・祝日','基本時間割・教科・下校時刻','連絡帳用スライド','初期設定チェック'];var el=document.getElementById(ids[wizardStep%ids.length]);el.scrollIntoView({behavior:'smooth',block:'center'});if(el.focus)el.focus();document.getElementById('wizardText').innerText='手順 '+((wizardStep%ids.length)+1)+'/5：'+labels[wizardStep%ids.length];wizardStep++;}
+      function finishWizard(){loadSystemStatus();setTimeout(function(){if(document.getElementById('statusList').querySelector('.status-error'))return alert('赤い項目を修正してから完了してください。');productivityData.wizardDone=true;saveProductivity(function(){alert('初回設定を完了しました。');});},700);}
+      function createBackupNow(){if(!confirm('現在の状態をGoogleドライブにバックアップしますか？'))return;google.script.run.withSuccessHandler(function(r){alert(r.message||r.error);loadBackups();}).createAppBackup('手動');}
+      function loadBackups(){google.script.run.withSuccessHandler(function(r){var box=document.getElementById('backupList');if(!r.backups.length){box.innerText='バックアップはありません。';return;}box.innerHTML=r.backups.map(function(b){return '<div style="padding:7px;border-bottom:1px solid #eee"><a href="'+b.url+'" target="_blank">'+escapeHtml(b.name)+'</a> <button type="button" class="btn-small btn-edit" onclick="restoreBackup(\''+b.id+'\')">復元</button></div>';}).join('');}).listAppBackups();}
+      function restoreBackup(id){var text=prompt('復元すると現在のデータが置き換わります。\n確認のため「復元する」と入力してください。');if(text!=='復元する')return alert('復元を中止しました。');if(!confirm('本当にこのバックアップへ復元しますか？'))return;google.script.run.withSuccessHandler(function(r){alert(r.message||r.error);if(r.success)location.reload();}).restoreAppBackup(id,text);}
+
       function runSafeReset() {
         var agreed = document.getElementById('resetAgree').checked;
         var text = document.getElementById('resetConfirmText').value.trim();
@@ -613,6 +674,7 @@
             document.getElementById('loading').style.display = 'none';
           })
           .saveSettingsData(data);
+        saveProductivity();
       }
     </script>
   </body>
