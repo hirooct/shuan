@@ -449,7 +449,8 @@
         if(data.error) { alert(data.error); return; }
         document.getElementById('loading').style.display = 'none';
         
-        document.getElementById('lblYear').innerText = data.year + "年度";
+        const headerParts = [data.year + "年度", data.schoolName, data.className, data.teacherName].filter(Boolean);
+        document.getElementById('lblYear').innerText = headerParts.join("　");
         document.getElementById('lblDuration').innerText = "期間: " + data.startDate + " 〜 " + data.endDate + " (第 " + data.weekNum + " 週)";
         
         globalConfigList = data.colorSubjects || [];
