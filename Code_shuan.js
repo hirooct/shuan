@@ -7,10 +7,16 @@ function doGet(e) {
   const requestedPage = e && e.parameter ? e.parameter.p : '';
   const page = allowedPages.includes(requestedPage) ? requestedPage : 'index';
 
-  return HtmlService.createTemplateFromFile(page)
-      .evaluate()
+  const appSettings = getAppDisplaySettings_();
+  const template = HtmlService.createTemplateFromFile(page);
+  template.appName = appSettings.appName;
+  template.schoolName = appSettings.schoolName;
+  template.className = appSettings.className;
+  template.teacherName = appSettings.teacherName;
+
+  return template.evaluate()
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-      .setTitle('学級経営管理ツール');
+      .setTitle(appSettings.appName);
 }
 
 // 他の画面へのリンクを生成するための補助関数（HTML側で使用）
@@ -194,8 +200,12 @@ function getWeeklyDataByNumber(targetWeekNum) {
     });
   };
 
+  const appSettings = getAppDisplaySettings_();
   return {
     year: String(mainData[1][0]).replace(/年度/g, ""),
+    schoolName: appSettings.schoolName,
+    className: appSettings.className,
+    teacherName: appSettings.teacherName,
     startDate: (weekDates[0].getMonth() + 1) + "月" + weekDates[0].getDate() + "日",
     endDate: (weekDates[6].getMonth() + 1) + "月" + weekDates[6].getDate() + "日",
     weekNum: targetWeekNum,
