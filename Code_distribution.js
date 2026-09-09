@@ -1,7 +1,7 @@
 /**
  * 配付・初期設定・保守機能
  */
-var SHUAN_APP_VERSION = '2.0.0';
+var SHUAN_APP_VERSION = '3.0.0';
 var SHUAN_APP_UPDATED_AT = '2026-09-09';
 var SHUAN_RESET_CONFIRM_TEXT = '初期化する';
 
@@ -254,6 +254,9 @@ function initializeForDistribution(confirmText) {
       return { error: '必要なシートがありません: ' + missing.join('、') };
     }
 
+    // 初期化に進む直前の完全コピーを必ず残す。
+    createAppBackup('初期化直前');
+
     const lastColumn = weekly.getLastColumn();
     if (lastColumn >= 2) {
       weekly.getRange(9, 2, 1, lastColumn - 1).clearContent();
@@ -269,7 +272,11 @@ function initializeForDistribution(confirmText) {
     settings.getRange('AB3:AB12').clearContent();
 
     communication.getRange(1, 2, Math.max(communication.getLastRow(), 20), 1).clearContent();
-    PropertiesService.getDocumentProperties().deleteAllProperties();
+    const documentProps = PropertiesService.getDocumentProperties();
+    ['APP_NAME', 'SCHOOL_NAME', 'CLASS_NAME', 'TEACHER_NAME',
+      SHUAN_PRODUCTIVITY_KEYS.PATTERNS, SHUAN_PRODUCTIVITY_KEYS.PHRASES,
+      SHUAN_PRODUCTIVITY_KEYS.TSUSHIN, SHUAN_PRODUCTIVITY_KEYS.WIZARD
+    ].forEach(function(key) { documentProps.deleteProperty(key); });
     SpreadsheetApp.flush();
 
     return {
