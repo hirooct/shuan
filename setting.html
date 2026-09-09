@@ -36,6 +36,21 @@
       .btn-area { margin-top: 40px; display: flex; gap: 12px; justify-content: center; }
       .btn-save { background: #0d9488; color: white; border: none; padding: 12px 40px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px; }
       .btn-back { background: #64748b; color: white; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: bold; display: flex; align-items: center; }
+      .btn-small { border: none; border-radius: 5px; padding: 6px 9px; color: white; cursor: pointer; font-weight: bold; }
+      .btn-edit { background: #2563eb; }
+      .btn-delete { background: #dc2626; }
+      .btn-copy { background: #7c3aed; color: white; border: none; border-radius: 5px; padding: 9px 14px; cursor: pointer; font-weight: bold; white-space: nowrap; }
+      .status-panel { border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; background: #f8fafc; }
+      .status-summary { font-weight: bold; margin-bottom: 10px; }
+      .status-item { padding: 7px 9px; margin: 5px 0; border-radius: 5px; font-size: 12px; }
+      .status-ok { background: #dcfce7; color: #166534; }
+      .status-warning { background: #fef3c7; color: #92400e; }
+      .status-error { background: #fee2e2; color: #991b1b; }
+      .version-badge { display: inline-block; background: #e2e8f0; color: #475569; padding: 4px 8px; border-radius: 999px; font-size: 11px; margin-left: 8px; }
+      .danger-zone { border: 2px solid #fecaca; background: #fff7f7; border-radius: 8px; padding: 16px; margin-top: 30px; }
+      .danger-zone h2 { color: #991b1b; background: #fee2e2; margin-top: 0; }
+      .btn-reset { background: #b91c1c; color: white; border: none; border-radius: 6px; padding: 10px 16px; cursor: pointer; font-weight: bold; }
+      .event-empty { color: #64748b; text-align: center; padding: 16px; }
       
       #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; font-weight: bold; color: #475569; font-size: 16px; text-align: center; padding: 20px; box-sizing: border-box; }
       .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 10px; }
@@ -70,7 +85,14 @@
     </div>
 
     <div class="container">
-      <h1>⚙️ システム設定</h1>
+      <h1>⚙️ システム設定 <span id="versionBadge" class="version-badge">確認中</span></h1>
+
+      <h2>✅ 初期設定チェック</h2>
+      <div class="status-panel">
+        <div id="statusSummary" class="status-summary">確認中...</div>
+        <div id="statusList"></div>
+        <button type="button" class="btn-holiday" style="margin-top:10px;" onclick="loadSystemStatus()">もう一度確認する</button>
+      </div>
 
       <h2>🏫 基本情報</h2>
       <div class="row">
@@ -112,9 +134,19 @@
       <div class="row">
         <div class="field" style="max-width: 100%;">
           <label>連絡帳用スライドURL (U13)</label>
-          <input type="text" id="slideUrl">
+          <input type="text" id="slideUrl" placeholder="配付されたスライド原本のURLでも可">
+        </div>
+        <div class="field-btn">
+          <button type="button" class="btn-copy" onclick="copySlideForMe()">📄 自分のドライブにコピーして設定</button>
         </div>
       </div>
+
+      <h2>📌 行事・休日の管理</h2>
+      <p style="font-size:12px;color:#64748b;">週案ページで登録した行事・休日を編集・削除できます。</p>
+      <table id="eventManageTable">
+        <thead><tr><th>種別</th><th>日付</th><th>名称</th><th style="width:130px;">操作</th></tr></thead>
+        <tbody><tr><td colspan="4" class="event-empty">読み込み中...</td></tr></tbody>
+      </table>
 
       <h2>📅 長期休暇設定 (M2:P4)</h2>
       <table id="vacationTable">
@@ -159,6 +191,22 @@
       <div class="btn-area">
         <a href="<?= getScriptUrl(); ?>" class="btn-back">← メニューへ戻る</a>
         <button class="btn-save" onclick="saveSettings()">設定を保存する</button>
+      </div>
+
+      <div class="danger-zone">
+        <h2>⚠️ 配付用初期化</h2>
+        <p style="font-size:13px;line-height:1.6;">
+          週案・学級通信・行事・休日・基本設定など、先生が入力したデータを消去します。
+          シート構造と週案の数式は残ります。元に戻せません。
+        </p>
+        <label>
+          <input type="checkbox" id="resetAgree" style="width:auto;"> 初期化の内容を確認し、元に戻せないことを理解しました
+        </label>
+        <div style="margin:12px 0;">
+          <label>確認のため「初期化する」と入力してください</label>
+          <input type="text" id="resetConfirmText" autocomplete="off">
+        </div>
+        <button type="button" class="btn-reset" onclick="runSafeReset()">入力データを初期化する</button>
       </div>
     </div>
 
@@ -289,6 +337,8 @@
 
           logMsg("✅ 全テーブルの構築が正常に完了しました！");
           document.getElementById('loading').style.display = 'none';
+          loadSystemStatus();
+          loadConfigEntries();
 
         } catch (jsError) {
           showError("表示構築エラー: " + jsError.message);
@@ -340,6 +390,174 @@
             document.getElementById('loading').style.display = 'none';
           })
           .fetchAndWriteHolidays(currentYear, nextYear);
+      }
+
+
+      function loadSystemStatus() {
+        document.getElementById('statusSummary').innerText = '確認中...';
+        google.script.run
+          .withSuccessHandler(function(result) {
+            document.getElementById('versionBadge').innerText =
+              'v' + result.version + ' / ' + result.updatedAt;
+            document.getElementById('statusSummary').innerText =
+              result.ready ? '利用開始できる状態です。' : '修正が必要な項目があります。';
+            document.getElementById('statusList').innerHTML = result.checks.map(function(check) {
+              var icon = check.status === 'ok' ? '✅' : check.status === 'warning' ? '⚠️' : '❌';
+              return '<div class="status-item status-' + check.status + '">' +
+                icon + ' <strong>' + escapeHtml(check.label) + '</strong>：' +
+                escapeHtml(check.message) + '</div>';
+            }).join('');
+          })
+          .withFailureHandler(function(err) {
+            document.getElementById('statusSummary').innerText = '確認に失敗しました: ' + err.message;
+          })
+          .getSystemStatus();
+      }
+
+      function escapeHtml(value) {
+        var div = document.createElement('div');
+        div.textContent = value == null ? '' : String(value);
+        return div.innerHTML;
+      }
+
+      function loadConfigEntries() {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            var tbody = document.querySelector('#eventManageTable tbody');
+            if (!result || result.error) {
+              tbody.innerHTML = '<tr><td colspan="4" class="event-empty">' +
+                escapeHtml(result && result.error ? result.error : '読み込めませんでした。') + '</td></tr>';
+              return;
+            }
+            if (!result.entries.length) {
+              tbody.innerHTML = '<tr><td colspan="4" class="event-empty">登録はありません。</td></tr>';
+              return;
+            }
+            tbody.innerHTML = result.entries.map(function(item) {
+              return '<tr data-type="' + item.type + '" data-row="' + item.row + '">' +
+                '<td>' + escapeHtml(item.typeLabel) + '</td>' +
+                '<td><input type="date" class="entry-date" value="' + escapeHtml(item.date) + '"></td>' +
+                '<td><input type="text" class="entry-name" value="' + escapeHtml(item.name) + '"></td>' +
+                '<td><button type="button" class="btn-small btn-edit" onclick="saveEntry(this)">保存</button> ' +
+                '<button type="button" class="btn-small btn-delete" onclick="removeEntry(this)">削除</button></td>' +
+                '</tr>';
+            }).join('');
+          })
+          .withFailureHandler(function(err) {
+            document.querySelector('#eventManageTable tbody').innerHTML =
+              '<tr><td colspan="4" class="event-empty">読み込みに失敗しました: ' +
+              escapeHtml(err.message) + '</td></tr>';
+          })
+          .getConfigEntries();
+      }
+
+      function saveEntry(button) {
+        var tr = button.closest('tr');
+        var date = tr.querySelector('.entry-date').value;
+        var name = tr.querySelector('.entry-name').value.trim();
+        if (!date || !name) {
+          alert('日付と名称を入力してください。');
+          return;
+        }
+        button.disabled = true;
+        google.script.run
+          .withSuccessHandler(function(result) {
+            button.disabled = false;
+            if (!result || result.error) {
+              alert(result && result.error ? result.error : '更新できませんでした。');
+              return;
+            }
+            alert(result.message);
+            loadConfigEntries();
+          })
+          .withFailureHandler(function(err) {
+            button.disabled = false;
+            alert('更新に失敗しました: ' + err.message);
+          })
+          .updateConfigEntry(tr.dataset.type, Number(tr.dataset.row), date, name);
+      }
+
+      function removeEntry(button) {
+        var tr = button.closest('tr');
+        var name = tr.querySelector('.entry-name').value;
+        if (!confirm('「' + name + '」を削除しますか？')) return;
+        if (!confirm('この削除は元に戻せません。本当に削除しますか？')) return;
+        button.disabled = true;
+        google.script.run
+          .withSuccessHandler(function(result) {
+            button.disabled = false;
+            if (!result || result.error) {
+              alert(result && result.error ? result.error : '削除できませんでした。');
+              return;
+            }
+            alert(result.message);
+            loadConfigEntries();
+          })
+          .withFailureHandler(function(err) {
+            button.disabled = false;
+            alert('削除に失敗しました: ' + err.message);
+          })
+          .deleteConfigEntry(tr.dataset.type, Number(tr.dataset.row));
+      }
+
+      function copySlideForMe() {
+        var sourceUrl = document.getElementById('slideUrl').value.trim();
+        if (!sourceUrl) {
+          alert('コピー元となるGoogleスライドのURLを入力してください。');
+          return;
+        }
+        if (!confirm('このスライドを自分のGoogleドライブにコピーしますか？')) return;
+        document.getElementById('loadingText').innerText = 'スライドをコピー中...';
+        document.getElementById('loading').style.display = 'flex';
+        google.script.run
+          .withSuccessHandler(function(result) {
+            document.getElementById('loading').style.display = 'none';
+            if (!result || result.error) {
+              alert(result && result.error ? result.error : 'コピーできませんでした。');
+              return;
+            }
+            document.getElementById('slideUrl').value = result.url;
+            alert(result.message);
+            loadSystemStatus();
+          })
+          .withFailureHandler(function(err) {
+            document.getElementById('loading').style.display = 'none';
+            alert('コピーに失敗しました: ' + err.message);
+          })
+          .copySlideTemplate(sourceUrl);
+      }
+
+      function runSafeReset() {
+        var agreed = document.getElementById('resetAgree').checked;
+        var text = document.getElementById('resetConfirmText').value.trim();
+        if (!agreed) {
+          alert('初期化内容を確認したチェックを入れてください。');
+          return;
+        }
+        if (text !== '初期化する') {
+          alert('確認文字が一致しません。初期化は実行されません。');
+          return;
+        }
+        if (!confirm('本当に入力データを初期化しても大丈夫ですか？')) return;
+        if (!confirm('最終確認です。元に戻せません。初期化を実行しますか？')) return;
+
+        document.getElementById('loadingText').innerText = '初期化中...';
+        document.getElementById('loading').style.display = 'flex';
+        google.script.run
+          .withSuccessHandler(function(result) {
+            document.getElementById('loading').style.display = 'none';
+            if (!result || result.error) {
+              alert(result && result.error ? result.error : '初期化できませんでした。');
+              return;
+            }
+            alert(result.message);
+            location.reload();
+          })
+          .withFailureHandler(function(err) {
+            document.getElementById('loading').style.display = 'none';
+            alert('初期化に失敗しました: ' + err.message);
+          })
+          .initializeForDistribution(text);
       }
 
      function saveSettings() {
