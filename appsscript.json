@@ -1,19 +1,5 @@
 {
   "timeZone": "Asia/Tokyo",
-  "dependencies": {
-    "enabledAdvancedServices": [
-      {
-        "userSymbol": "Drive",
-        "version": "v3",
-        "serviceId": "drive"
-      },
-      {
-        "userSymbol": "Calendar",
-        "version": "v3",
-        "serviceId": "calendar"
-      }
-    ]
-  },
   "webapp": {
     "executeAs": "USER_DEPLOYING",
     "access": "MYSELF"
