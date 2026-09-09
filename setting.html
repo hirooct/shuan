@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 20px; color: #334155; }
+      .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+      h1 { font-size: 20px; border-left: 5px solid #64748b; padding-left: 15px; margin-bottom: 25px; color: #1e293b; }
+      h2 { font-size: 15px; background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 30px; color: #475569; border-bottom: 2px solid #e2e8f0; }
+      
+      .row { display: flex; gap: 20px; margin-bottom: 15px; flex-wrap: wrap; align-items: flex-end; }
+      .field { flex: 1; min-width: 150px; }
+      .field-btn { flex: 1.2; min-width: 220px; }
+      label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #64748b; }
+      input { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+
+      .btn-holiday { background: #2563eb; color: white; border: none; padding: 9px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; width: 100%; transition: background 0.2s; }
+      .btn-holiday:hover { background: #1d4ed8; }
+
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #fff; }
+      th { font-size: 12px; background: #f1f5f9; padding: 10px; border: 1px solid #cbd5e1; color: #475569; }
+      td { border: 1px solid #cbd5e1; padding: 4px; }
+      td input { border: none; padding: 6px; width: 100%; box-sizing: border-box; background: transparent; }
+      td input:focus { background: #eff6ff; outline: none; }
+      
+      td input[type="date"], td input[type="time"] {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-family: inherit;
+      }
+
+      .read-only-cell { background: #f8fafc; color: #64748b; font-weight: bold; padding-left: 10px; font-size: 13px; }
+      .tables-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+      .btn-area { margin-top: 40px; display: flex; gap: 12px; justify-content: center; }
+      .btn-save { background: #0d9488; color: white; border: none; padding: 12px 40px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px; }
+      .btn-back { background: #64748b; color: white; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: bold; display: flex; align-items: center; }
+      
+      #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; font-weight: bold; color: #475569; font-size: 16px; text-align: center; padding: 20px; box-sizing: border-box; }
+      .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 10px; }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      .error-text { color: #dc2626; font-size: 14px; margin-top: 10px; background: #fef2f2; padding: 10px; border-radius: 6px; border: 1px solid #fee2e2; width: 80%; max-width: 600px; text-align: left; overflow-x: auto; }
+      
+      #debugLogBox { width: 80%; max-width: 600px; background: #1e293b; color: #38bdf8; font-family: monospace; font-size: 12px; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: left; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); max-height: 200px; overflow-y: auto; }
+    </style>
+    
+    <script>
+      window.addEventListener('error', function(e) {
+        try {
+          var box = document.getElementById('debugLogBox');
+          if (box) {
+            box.innerText += "\n[Error] " + e.message + " (Line: " + e.lineno + ")";
+          }
+          var txt = document.getElementById('loadingText');
+          if (txt) {
+            txt.innerText = "起動エラーが発生しました。下のログを確認してください。";
+          }
+          var spinner = document.getElementById('spinner');
+          if (spinner) spinner.style.display = 'none';
+        } catch(err) {}
+      });
+    </script>
+  </head>
+  <body>
+    <div id="loading">
+      <div class="spinner" id="spinner"></div>
+      <div id="loadingText">設定データを初期化中...</div>
+      <div id="debugLogBox">【システム実行ログ】</div>
+    </div>
+
+    <div class="container">
+      <h1>⚙️ システム設定</h1>
+      
+      <div class="row">
+        <div class="field">
+          <label>指定年度 西暦 (A2)</label>
+          <input type="text" id="nendo" placeholder="例: 2026">
+        </div>
+        <div class="field">
+          <label>翌年度 西暦 (C2)</label>
+          <input type="text" id="nextNendo" placeholder="例: 2027">
+        </div>
+        <div class="field-btn">
+          <button type="button" class="btn-holiday" onclick="updateHolidays()">📅 内閣府CSVから祝日データを取得</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field" style="max-width: 100%;">
+          <label>連絡帳用スライドURL (U13)</label>
+          <input type="text" id="slideUrl">
+        </div>
+      </div>
+
+      <h2>📅 長期休暇設定 (M2:P4)</h2>
+      <table id="vacationTable">
+        <thead>
+          <tr><th style="width: 200px;">休暇名</th><th>始め（開始日）</th><th>終わり（終了日）</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <h2>⏰ 通常の時間割 (V3:Z8)</h2>
+      <table id="timetable">
+        <thead>
+          <tr><th style="width: 60px;">🕳️</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="tables-grid">
+        <div>
+          <h2>📚 教科リスト (L8~L22)</h2>
+          <table id="subjectsTable">
+            <thead><tr><th>教科名</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div>
+          <h2>🏠 下校時間 (M8~M22)</h2>
+          <table id="dismissalTable">
+            <thead><tr><th>下校時刻</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div>
+          <h2>🎨 色を変える教科 (AB3~AB12)</h2>
+          <table id="colorSubjectsTable">
+            <thead><tr><th>対象の教科名</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="btn-area">
+        <a href="<?= getScriptUrl(); ?>" class="btn-back">← メニューへ戻る</a>
+        <button class="btn-save" onclick="saveSettings()">設定を保存する</button>
+      </div>
+    </div>
+
+    <script>
+      function logMsg(msg) {
+        try {
+          var box = document.getElementById('debugLogBox');
+          if (box) {
+            box.innerHTML += "<br>⏳ " + msg;
+            box.scrollTop = box.scrollHeight;
+          }
+        } catch(e) {}
+      }
+
+      function showError(msg) {
+        try {
+          document.getElementById('spinner').style.display = 'none';
+          document.getElementById('loadingText').innerHTML = `<div class="error-text">⚠️ 致命的なエラー<br>${msg}</div>`;
+        } catch(e) {}
+      }
+
+      function parseDateForInput(raw) {
+        if (!raw) return "";
+        try {
+          var clean = String(raw).split('/').join('-').trim();
+          if (clean.length === 10 && clean.charAt(4) === '-' && clean.charAt(7) === '-') return clean;
+          
+          var d = new Date(raw);
+          if (isNaN(d.getTime())) return "";
+          var m = '' + (d.getMonth() + 1), day = '' + d.getDate(), y = d.getFullYear();
+          return [y, m.padStart(2, '0'), day.padStart(2, '0')].join('-');
+        } catch(e) {
+          return "";
+        }
+      }
+
+      function parseTimeForInput(raw) {
+        if (!raw) return "";
+        try {
+          var str = String(raw);
+          if (str.indexOf(':') !== -1) {
+            var parts = str.split(':');
+            if (parts.length >= 2) {
+              return parts[0].padStart(2, '0') + ":" + parts[1].padStart(2, '0');
+            }
+          }
+          return "";
+        } catch(e) {
+          return "";
+        }
+      }
+
+      logMsg("スクリプトブロックの読み込みに成功しました。");
+
+      window.onload = function() {
+        logMsg("window.onloadが正常に発火。GASへデータを要求します...");
+        google.script.run
+          .withSuccessHandler(showSettings)
+          .withFailureHandler(function(err) {
+            logMsg("❌ GASからのデータ取得そのものに失敗しました。");
+            showError("GASサーバー通信エラー: " + err.message);
+          })
+          .getSettingsData();
+      };
+
+      function showSettings(data) {
+        logMsg("🎉 GASからデータを受信しました！画面の構築を開始します。");
+        try {
+          if (!data) {
+            showError("受信データが空です。");
+            return;
+          }
+          
+          document.getElementById('nendo').value = data.nendo || "";
+          document.getElementById('nextNendo').value = data.nextNendo || "";
+          document.getElementById('slideUrl').value = data.slideUrl || "";
+
+          var vBody = document.getElementById('vacationTable').getElementsByTagName('tbody')[0];
+          var names = (data.vacation && data.vacation[0]) ? data.vacation[0] : ["春季", "夏季", "冬季", "学年末"];
+          var starts = (data.vacation && data.vacation[1]) ? data.vacation[1] : [];
+          var ends = (data.vacation && data.vacation[2]) ? data.vacation[2] : [];
+          
+          for (var j = 0; j < 4; j++) {
+            var tr = vBody.insertRow();
+            var tdName = tr.insertCell();
+            tdName.innerText = names[j] || "";
+            tdName.className = "read-only-cell";
+            
+            var tdStart = tr.insertCell();
+            var inputStart = document.createElement('input');
+            inputStart.type = "date";
+            inputStart.value = parseDateForInput(starts[j]);
+            inputStart.className = "vacation-start-" + j;
+            tdStart.appendChild(inputStart);
+            
+            var tdEnd = tr.insertCell();
+            var inputEnd = document.createElement('input');
+            inputEnd.type = "date";
+            inputEnd.value = parseDateForInput(ends[j]);
+            inputEnd.className = "vacation-end-" + j;
+            tdEnd.appendChild(inputEnd);
+          }
+
+          var tBody = document.getElementById('timetable').getElementsByTagName('tbody')[0];
+          for (var i = 0; i < 6; i++) {
+            var tr = tBody.insertRow();
+            var th = document.createElement('th');
+            th.innerText = (i + 1) + '限';
+            th.style.background = "#f1f5f9";
+            tr.appendChild(th);
+            
+            for (var j = 0; j < 5; j++) {
+              var input = document.createElement('input');
+              input.type = "text";
+              input.value = (data.timetable && data.timetable[i] && data.timetable[i][j]) ? data.timetable[i][j] : "";
+              input.className = "time-" + i + "-" + j;
+              tr.insertCell().appendChild(input);
+            }
+          }
+
+          fillListTable('subjectsTable', data.subjects, 'subject', 15, "text");
+          fillListTable('dismissalTable', data.dismissal, 'dismissal', 15, "time");
+          fillListTable('colorSubjectsTable', data.colorSubjects, 'colorSub', 10, "text");
+
+          logMsg("✅ 全テーブルの構築が正常に完了しました！");
+          document.getElementById('loading').style.display = 'none';
+
+        } catch (jsError) {
+          showError("表示構築エラー: " + jsError.message);
+        }
+      }
+
+      function fillListTable(tableId, list, classPrefix, maxCount, inputType) {
+        try {
+          var tbody = document.getElementById(tableId).getElementsByTagName('tbody')[0];
+          for (var i = 0; i < maxCount; i++) {
+            var tr = tbody.insertRow();
+            var input = document.createElement('input');
+            input.type = inputType;
+            
+            var rawValue = (list && list[i]) ? list[i] : "";
+            if (inputType === "time") {
+              input.value = parseTimeForInput(rawValue);
+            } else {
+              input.value = rawValue;
+            }
+            
+            input.className = classPrefix + '-' + i;
+            tr.insertCell().appendChild(input);
+          }
+        } catch(e) {}
+      }
+
+      function updateHolidays() {
+        var currentYear = document.getElementById('nendo').value.trim();
+        var nextYear = document.getElementById('nextNendo').value.trim();
+
+        if(!currentYear || !nextYear) {
+          alert("指定年度と翌年度の両方に西暦（数字4桁）を入力してください。");
+          return;
+        }
+
+        document.getElementById('spinner').style.display = 'inline-block';
+        document.getElementById('loadingText').innerText = "内閣府公式のCSVから祝日データを一括抽出中...";
+        document.getElementById('loading').style.display = 'flex';
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            alert(res); // 「【完了】Googleカレンダーから...」のメッセージをポップアップ表示
+            // 💡 画面遷移（リロード）を廃止し、ローディング画面を閉じるだけに修正
+            document.getElementById('loading').style.display = 'none';
+          })
+          .withFailureHandler(function(err) {
+            alert("祝日の取得に失敗しました: " + err.message);
+            document.getElementById('loading').style.display = 'none';
+          })
+          .fetchAndWriteHolidays(currentYear, nextYear);
+      }
+
+     function saveSettings() {
+        document.getElementById('spinner').style.display = 'inline-block';
+        document.getElementById('loadingText').innerText = "設定を保存中...";
+        document.getElementById('loading').style.display = 'flex';
+
+        var data = {
+          nendo: document.getElementById('nendo').value,
+          nextNendo: document.getElementById('nextNendo').value,
+          slideUrl: document.getElementById('slideUrl').value,
+          vacationStart: [],
+          vacationEnd: [],
+          timetable: [],
+          subjects: [],
+          dismissal: [],
+          colorSubjects: []
+        };
+
+        for (var j = 0; j < 4; j++) {
+          var sVal = document.querySelector(".vacation-start-" + j).value;
+          var eVal = document.querySelector(".vacation-end-" + j).value;
+          data.vacationStart.push(sVal ? String(sVal).split('-').join('/') : "");
+          data.vacationEnd.push(eVal ? String(eVal).split('-').join('/') : "");
+        }
+
+        for (var i = 0; i < 6; i++) {
+          var row = [];
+          for (var j = 0; j < 5; j++) row.push(document.querySelector(".time-" + i + "-" + j).value);
+          data.timetable.push(row);
+        }
+
+        for (var i = 0; i < 15; i++) {
+          data.subjects.push(document.querySelector(".subject-" + i).value);
+          data.dismissal.push(document.querySelector(".dismissal-" + i).value);
+        }
+        for (var i = 0; i < 10; i++) {
+          data.colorSubjects.push(document.querySelector(".colorSub-" + i).value);
+        }
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            alert(res); // 「設定を保存しました！」を表示
+            // 💡 ホワイトアウトの原因となるリロードを廃止し、ローディング画面を閉じるだけに修正
+            document.getElementById('loading').style.display = 'none';
+          })
+          .withFailureHandler(function(err) {
+            alert("保存に失敗しました: " + err.message);
+            document.getElementById('loading').style.display = 'none';
+          })
+          .saveSettingsData(data);
+      }
+    </script>
+  </body>
+</html>

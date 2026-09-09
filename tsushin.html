@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>学級通信作成Webアプリ</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic:wght@400;700&family=BIZ+UDPMincho:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  * { box-sizing: border-box; }
+  body { 
+    margin: 0; 
+    font-family: "BIZ UDPMincho", "Hiragino Mincho ProN", "MS Mincho", serif; 
+    background: #eef2f7; 
+    color: #222; 
+  }
+  .app { display: grid; grid-template-columns: 360px 1fr; min-height: 100vh; }
+  
+  .side { background: #fff; padding: 24px; border-right: 1px solid #d8dee8; height: 100vh; overflow-y: auto; position: sticky; top: 0; font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif; }
+  .side h1 { font-size: 18px; color: var(--theme-color, #1f3a5f); margin-top: 0; margin-bottom: 20px; border-bottom: 2px solid var(--theme-color, #1f3a5f); padding-bottom: 8px; transition: all 0.3s; }
+  .panel { margin-bottom: 20px; padding: 16px; border: 1px solid #dde5f0; border-radius: 12px; background: #f8fbff; }
+  label { display: block; font-weight: bold; font-size: 13px; margin: 12px 0 6px; color: #334155; }
+  input, textarea, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; font-family: inherit; }
+  
+  textarea { min-height: 120px; line-height: 1.6; resize: vertical; }
+  /* 今週のひとこま用は少し広めに */
+  #columnBody { min-height: 200px; }
+  
+  .qr-edit-group { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .qr-edit-group input[type="text"] { flex-grow: 1; }
+  .qr-edit-group label { margin: 0; display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+  .qr-edit-group input[type="checkbox"] { width: auto; cursor: pointer; }
+
+  /* トピックス写真設定用のボックステキスト */
+  .sub-panel-box { margin-top: 10px; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 8px; background: #fff; }
+
+  .btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .saveBtn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; background: #2e7d32; color: white; transition: background 0.2s; font-family: inherit; }
+  .saveBtn:hover { filter: brightness(0.85); }
+  .printBtn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: bold; font-size: 15px; cursor: pointer; background: var(--theme-color, #1f4d8f); color: white; transition: background 0.2s; font-family: inherit; }
+  .printBtn:hover { filter: brightness(0.85); }
+  
+  .previewWrap { padding: 28px; overflow: auto; display: flex; justify-content: center; }
+  .paper { width: 210mm; height: 297mm; background: white; padding: 10mm 13mm; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+  
+  .topHeader { border: 2px solid var(--theme-color, #1f3a5f); background: var(--bg-color, #e8eef7); padding: 8px 14px; border-radius: 6px; margin-bottom: 12px; }
+  .titleRow { display: flex; justify-content: space-between; align-items: center; }
+  .mainTitle { font-size: 26px; font-weight: 900; color: var(--theme-color, #1f3a5f); letter-spacing: 2px; font-family: sans-serif; }
+  .issue { font-size: 14px; font-weight: bold; border: 2px solid var(--theme-color, #1f3a5f); padding: 2px 12px; border-radius: 999px; background: #fff; font-family: "BIZ UDGothic", sans-serif; }
+  .meta { margin-top: 4px; text-align: right; font-size: 11px; color: #475569; border-top: 1px dashed var(--theme-color, #1f3a5f); padding-top: 3px; font-family: "BIZ UDGothic", sans-serif; }
+  
+  .sectionTitle { margin: 8px 0 4px; padding: 4px 10px; background: var(--theme-color, #1f3a5f); color: white; font-size: 16px; font-weight: bold; border-radius: 4px; font-family: "BIZ UDGothic", sans-serif; }
+  .sectionSubNote { font-size: 10px; color: #555; margin: -4px 4px 2px 0; font-weight: bold; text-align: right; font-family: "BIZ UDGothic", sans-serif; }
+
+  /* 2列（写真あり）コラム用スタイル */
+  .columnBox { 
+    display: grid; 
+    grid-template-columns: 40% 1fr; 
+    gap: 12px; 
+    border: 1.5px solid var(--theme-color, #1f3a5f); 
+    padding: 8px; 
+    border-radius: 6px; 
+    background: #fff; 
+    margin-bottom: 4px;
+    align-items: center; 
+  }
+  /* 1列（写真なし）コラム用スタイル */
+  .columnBox.no-photo {
+    display: block;
+  }
+
+  .photoContainer { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+  .photoSpace { min-height: 160px; height: 160px; border: 1px dashed #94a3b8; background: #f8fafc; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; position: relative; font-family: "BIZ UDGothic", sans-serif; }
+  .photoSpace.has-photo { border: none; }
+  .photoSpace img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.1s ease-out; transform-origin: center; }
+  .photoHint { color: #64748b; font-size: 12px; }
+  .photoCaption { font-size: 10px; color: #475569; line-height: 1.3; text-align: center; font-family: "BIZ UDGothic", sans-serif; white-space: pre-wrap; }
+  .photoCaption:empty { display: none; }
+
+  .columnText h2 { margin: 0 0 4px; font-size: 14px; color: var(--theme-color, #1f3a5f); border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; font-family: "BIZ UDGothic", sans-serif; }
+  .columnText p { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; color: #222; }
+  
+  /* 高さ自動調整のため、flex-grow を削除して中身に合わせる形に調整 */
+  .freeColumnBox { border: 1.5px solid var(--theme-color, #1f3a5f); padding: 10px 12px; border-radius: 6px; background: #fff; }
+  .freeColumnBox h2 { margin: 0 0 4px; font-size: 13.5px; color: var(--theme-color, #1f3a5f); border-bottom: 1px dashed #cbd5e1; padding-bottom: 2px; font-family: "BIZ UDGothic", sans-serif; }
+  .freeColumnBox p { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; color: #222; }
+
+  #nextWeekTable { flex-grow: 1; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-weight: bold; table-layout: fixed; background: #fff; font-family: "BIZ UDGothic", sans-serif; }
+  th { background: var(--bg-color, #e8eef7); color: var(--theme-color, #1f3a5f); font-weight: bold; }
+  th, td { border: 1px solid #9aa8ba; padding: 3px 1px; vertical-align: middle; text-align: center; word-break: break-all; line-height: 1.3; height: 1px; } 
+  .row-label { width: 45px; font-weight: bold; background: #f8fafc; font-size: 12px; }
+  
+  .event-cell { background-color: #fff; }
+  .period-cell { background-color: #fff; } 
+  .dismissal-cell { background-color: #e2e8f0 !important; color: #0f172a !important; font-weight: 700 !important; } 
+  .homework-cell { background-color: #f8fafc !important; text-align: left !important; padding-left: 5px !important; white-space: pre-wrap; } 
+  .holiday-col { background-color: var(--bg-color, #e8eef7) !important; color: #71717a !important; font-weight: normal !important; }
+  
+  .event-cell { white-space: nowrap !important; overflow: hidden !important; text-overflow: clip !important; padding: 3px 2px !important; }
+  .event-text { display: inline-block; white-space: nowrap; font-size: 13px; transform-origin: center center; }
+  .suiei-highlight { background-color: #e0f2f1 !important; color: #00796b !important; font-weight: bold !important; }
+  
+  .noticeBox { border: 1.5px solid var(--theme-color, #1f3a5f); border-radius: 6px; padding: 8px 12px; background: #fff; margin-bottom: 2px; }
+  .noticeList { font-size: 13px; line-height: 1.5; margin: 0; padding-left: 18px; color: #222; }
+  .noticeList li { margin-bottom: 4px; }
+
+  .bottom-layout { display: grid; grid-template-columns: 72% 1fr; gap: 12px; align-items: stretch; margin-top: 6px; flex-grow: 1; }
+  .bottom-left-table { display: flex; flex-direction: column; height: 100%; flex-grow: 1; }
+  #followingWeekTable { flex-grow: 1; }
+  
+  .bottom-right-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 0; height: 100%; } 
+  .duty-box { border: 1.5px solid var(--theme-color, #1f3a5f); border-radius: 6px; padding: 5px; text-align: center; background: #fff; transition: background-color 0.2s; }
+  .duty-box.hide-duty { display: none !important; }
+  .duty-title { font-size: 13px; font-weight: bold; color: #64748b; margin-bottom: 3px; font-family: "BIZ UDGothic", sans-serif; }
+  .duty-value { font-size: 24px; font-weight: 700; color: var(--theme-color, #1f3a5f); font-family: "BIZ UDGothic", sans-serif; }
+  .duty-box.duty-a { background-color: #ffebee !important; }
+  .duty-box.duty-b { background-color: #fffde7 !important; }
+
+  .qr-container { display: flex; flex-direction: column; justify-content: space-around; flex-grow: 1; border: 1.5px solid var(--theme-color, #1f3a5f); border-radius: 6px; padding: 8px 6px; background: #fff; }
+  .qr-block { text-align: center; padding: 4px 0; }
+  .qr-block.qr-hide { display: none !important; } 
+  .qr-block:first-child:not(.qr-hide) { border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px; }
+  .qr-label { font-size: 13px; font-weight: bold; color: #475569; margin-bottom: 4px; font-family: "BIZ UDGothic", sans-serif; }
+  .qr-code img { width: 50px; height: 50px; object-fit: contain; display: block; margin: 0 auto; }
+  .qr-note { font-size: 8px; font-weight: bold; color: #e11d48; text-align: center; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbd5e1; white-space: nowrap; font-family: "BIZ UDGothic", sans-serif; }
+  .qr-container.qr-all-hide { display: none !important; } 
+
+  .hidden-input { display: none !important; }
+
+  @media print {
+    body { background: white; }
+    .side { display: none; }
+    .app { display: block; }
+    .previewWrap { padding: 0; overflow: visible; }
+    .paper { width: 210mm; height: 297mm; margin: 0; padding: 10mm 13mm; box-shadow: none; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: A4 portrait; margin: 0; }
+  }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <aside class="side">
+    <h1>学級通信作成Webアプリ</h1>
+    
+    <div class="panel">
+      <label for="mainTitleInput">学級通信タイトル</label>
+      <input id="mainTitleInput" value="学級通信 Team6の3">
+      <label for="issueInput">号数</label>
+      <input id="issueInput" value="第11号">
+      <label for="dateInput">発行日</label>
+      <input id="dateInput" value="令和8年5月29日">
+      <label for="classInput">学校・学級</label>
+      <input id="classInput" value="御国野小学校 6年3組">
+    </div>
+
+    <!-- 今週のひとこま設定パネル -->
+    <div class="panel">
+      <label style="color: #1e3a8a; font-size: 14px;">▼ 今週のひとこま設定</label>
+      <label for="photoInput">写真を入れる</label>
+      <input type="file" id="photoInput" accept="image/*">
+      <label for="photoCaptionInput">写真の説明（キャプション）</label>
+      <input id="photoCaptionInput" value="" placeholder="例：マット運動の様子（5/25）">
+      <label>写真の調整</label>
+      <input type="range" id="zoomRange" min="1" max="3" step="0.05" value="1">
+      <input type="range" id="xPosRange" min="-150" max="150" step="1" value="0">
+      <input type="range" id="yPosRange" min="-150" max="150" step="1" value="0">
+      <hr style="border:0; border-top:1px solid #cbd5e1; margin:14px 0;">
+      <label for="columnTitle">タイトル</label>
+      <input id="columnTitle" value="マット運動がんばりました。">
+      <label for="columnBody">本文</label>
+      <textarea id="columnBody">「どうすれば回ってピタッと止まることができるか」を学習課題として、前転や後転だけでなく、開脚前転・開脚後転、側転、ロンダートなどにも挑戦しました。</textarea>
+    </div>
+
+    <!-- 上段エリア（トピックス）設定パネル -->
+    <div class="panel">
+      <label for="upperTypeSelect" style="color: #1e3a8a; font-size:14px;">▼ 上段エリアの表示内容</label>
+      <select id="upperTypeSelect" onchange="toggleUpperInputs()">
+        <option value="table">予定表を表示する</option>
+        <option value="column">フリーコラム（トピックス）を表示する</option>
+      </select>
+      
+      <div id="upperTableInputs">
+        <label for="upperTitleInput">見出し</label>
+        <input id="upperTitleInput" value="来週の予定">
+        <label for="upperWeekSelect">対象の週</label>
+        <select id="upperWeekSelect" onchange="loadWeeks()"></select>
+      </div>
+      
+      <div id="upperColumnInputs" class="hidden-input">
+        <label for="upperColTitleInput">コラム題</label>
+        <input id="upperColTitleInput" value="上段の特設コラム">
+        <label for="upperColBodyInput">コラム本文</label>
+        <textarea id="upperColBodyInput">上段をコラムに変更しました。</textarea>
+        
+        <!-- 【新規】上段トピックス用写真設定 -->
+        <div style="margin-top: 10px;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="upperHasPhotoInput" style="width: auto; cursor: pointer;" onchange="toggleUpperPhotoSettings()"> 写真を載せる
+          </label>
+          <div id="upperPhotoSettings" class="sub-panel-box hidden-input">
+            <label for="upperPhotoInput">トピックス写真</label>
+            <input type="file" id="upperPhotoInput" accept="image/*">
+            <label for="upperPhotoCaptionInput">キャプション</label>
+            <input id="upperPhotoCaptionInput" value="" placeholder="例：理科の実験（6/1）">
+            <label>トピックス写真の調整</label>
+            <input type="range" id="upperZoomRange" min="1" max="3" step="0.05" value="1">
+            <input type="range" id="upperXPosRange" min="-150" max="150" step="1" value="0">
+            <input type="range" id="upperYPosRange" min="-150" max="150" step="1" value="0">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <label for="lowerTypeSelect" style="color: #1e3a8a; font-size:14px;">▼ 下段エリアの表示内容</label>
+      <select id="lowerTypeSelect" onchange="toggleLowerInputs()">
+        <option value="table">予定表を表示する</option>
+        <option value="column">フリーコラムを表示する</option>
+      </select>
+      
+      <div id="lowerTableInputs">
+        <label for="lowerTitleInput">見出し</label>
+        <input id="lowerTitleInput" value="再来週の予定">
+        <label for="lowerWeekSelect">対象の週</label>
+        <select id="lowerWeekSelect" onchange="loadWeeks()"></select>
+      </div>
+      
+      <div id="lowerColumnInputs" class="hidden-input">
+        <label for="lowerColTitleInput">コラム題</label>
+        <input id="lowerColTitleInput" value="下段の特設コラム">
+        <label for="lowerColBodyInput">コラム本文</label>
+        <textarea id="lowerColBodyInput">下段エリアをコラムスペースとして活用します。</textarea>
+      </div>
+    </div>
+    
+    <div class="panel">
+      <label for="noticeInput">連絡事項</label>
+      <textarea id="noticeInput">習字道具がまだご家庭にある場合は、必ず持ってくるよう声掛けをよろしくお願いします。</textarea>
+    </div>
+
+    <!-- 給食当番とQRコード設定 -->
+    <div class="panel">
+      <label style="color: #1e3a8a; font-size: 14px;">▼ 給食当番設定</label>
+      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 12px;">
+        <input type="checkbox" id="showLunchDutyInput" checked style="width: auto; cursor: pointer;"> 給食当番を表示する
+      </label>
+
+      <hr style="border:0; border-top:1px solid #cbd5e1; margin:14px 0;">
+
+      <label>QRコード1 設定</label>
+      <div class="qr-edit-group">
+        <input id="qrRenrakuLabelInput" value="連絡帳" placeholder="ラベル名">
+        <label><input type="checkbox" id="qrRenrakuShowInput" checked> 表示</label>
+      </div>
+      <input id="qrRentakuUrl" value="https://docs.google.com/presentation/d/1Jm3TtdwSQcYgjcN1_PHe33_FKxqBKBj-tR83V2Sr_tY/edit" style="margin-top:4px;">
+
+      <label style="margin-top:12px;">QRコード2 設定</label>
+      <div class="qr-edit-group">
+        <input id="qrHomeworkLabelInput" value="宿題チェック" placeholder="ラベル名">
+        <label><input type="checkbox" id="qrHomeworkShowInput" checked> 表示</label>
+      </div>
+      <input id="qrHomeworkUrl" value="https://script.google.com/a/macros/g.himeji-hyg.ed.jp/s/AKfycby-90miDFjaDz3rwBZTQfAbjy43JbCgIH4wuVSVV-C0WOHYJ91QYcS2wex1WthodGHv/exec" style="margin-top:4px;">
+    </div>
+
+    <div class="panel">
+      <label for="colorSelect">テーマカラー</label>
+      <select id="colorSelect">
+        <option value="#1f3a5f,#e8eef7">クラシックネイビー</option>
+        <option value="#2e7d32,#e8f5e9">ナチュラルグリーン</option>
+        <option value="#c62828,#ffebee">チェリーレッド</option>
+        <option value="#ef6c00,#fff3e0">マリーゴールドオレンジ</option>
+        <option value="#6a1b9a,#f3e5f5">エレガントパープル</option>
+      </select>
+    </div>
+
+    <div class="btn-group">
+      <button class="saveBtn" onclick="saveToSpreadsheet()">スプレッドシートに一時保存</button>
+      <button class="printBtn" onclick="window.print()">印刷・保存</button>
+    </div>
+  </aside>
+
+  <main class="previewWrap">
+    <section class="paper">
+      <header class="topHeader">
+        <div class="titleRow">
+          <div class="mainTitle" id="pMainTitle"></div>
+          <div class="issue" id="pIssue"></div>
+        </div>
+        <div class="meta"><span id="pDate"></span> / <span id="pClass"></span></div>
+      </header>
+
+      <!-- 今週のひとこまエリア -->
+      <div class="columnBox">
+        <div class="photoContainer">
+          <div class="photoSpace" id="photoPreview"><span class="photoHint">写真スペース</span></div>
+          <div class="photoCaption" id="pPhotoCaption"></div>
+        </div>
+        
+        <div class="columnText">
+          <h2 id="pColumnTitle"></h2>
+          <p id="pColumnBody"></p>
+        </div>
+      </div>
+
+      <!-- 上段（トピックスまたは予定表）エリア -->
+      <div id="pUpperWrapper" style="display: flex; flex-direction: column; margin-bottom: 4px;"></div>
+
+      <div class="sectionTitle">連絡事項</div>
+      <div class="noticeBox">
+        <ul class="noticeList" id="pNoticeList"></ul>
+      </div>
+
+      <div class="bottom-layout">
+        <div class="bottom-left-table" id="pLowerWrapper"></div>
+        
+        <div class="bottom-right-panel">
+          <div class="duty-box" id="pDutyBox">
+            <div class="duty-title">今週の給食当番</div>
+            <div class="duty-value" id="pLunchDuty">未設定</div>
+          </div>
+          
+          <div class="qr-container" id="pQrContainer">
+            <div class="qr-block" id="pQrRenrakuBlock">
+              <div class="qr-label" id="pQrRenrakuLabel">連絡帳</div>
+              <div class="qr-code" id="qrRenrakuImg"></div>
+            </div>
+            <div class="qr-block" id="pQrHomeworkBlock">
+              <div class="qr-label" id="pQrHomeworkLabel">宿題チェック</div>
+              <div class="qr-code" id="qrHomeworkImg"></div>
+            </div>
+            <div class="qr-note" id="pQrNote">※学校用Googleアカウントが必要です</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+let nextWeekData = null;
+let followingWeekData = null;
+
+function toggleUpperInputs() {
+  const isTable = document.getElementById("upperTypeSelect").value === "table";
+  document.getElementById("upperTableInputs").classList.toggle("hidden-input", !isTable);
+  document.getElementById("upperColumnInputs").classList.toggle("hidden-input", isTable);
+  render();
+}
+function toggleLowerInputs() {
+  const isTable = document.getElementById("lowerTypeSelect").value === "table";
+  document.getElementById("lowerTableInputs").classList.toggle("hidden-input", !isTable);
+  document.getElementById("lowerColumnInputs").classList.toggle("hidden-input", isTable);
+  render();
+}
+
+function toggleUpperPhotoSettings() {
+  const hasPhoto = document.getElementById("upperHasPhotoInput").checked;
+  document.getElementById("upperPhotoSettings").classList.toggle("hidden-input", !hasPhoto);
+  render();
+}
+
+// フォームデータ取得ロジックの拡張（追加項目：upperHasPhoto, upperPhotoCaption, showLunchDuty）
+function getFormData() {
+  return {
+    issue: document.getElementById("issueInput").value,
+    issueDate: document.getElementById("dateInput").value, 
+    columnTitle: document.getElementById("columnTitle").value,
+    columnBody: document.getElementById("columnBody").value,
+    notice: document.getElementById("noticeInput").value,
+    qrRentaku: document.getElementById("qrRentakuUrl").value,
+    qrHomework: document.getElementById("qrHomeworkUrl").value,
+    upperType: document.getElementById("upperTypeSelect").value,
+    upperColTitle: document.getElementById("upperColTitleInput").value,
+    upperColBody: document.getElementById("upperColBodyInput").value,
+    upperHasPhoto: document.getElementById("upperHasPhotoInput").checked,
+    upperPhotoCaption: document.getElementById("upperPhotoCaptionInput").value,
+    lowerType: document.getElementById("lowerTypeSelect").value,
+    lowerColTitle: document.getElementById("lowerColTitleInput").value,
+    lowerColBody: document.getElementById("lowerColBodyInput").value,
+    photoCaption: document.getElementById("photoCaptionInput").value,
+    upperWeek: document.getElementById("upperWeekSelect").value,
+    lowerWeek: document.getElementById("lowerWeekSelect").value,
+    qrRenrakuLabel: document.getElementById("qrRenrakuLabelInput").value,
+    qrRenrakuShow: document.getElementById("qrRenrakuShowInput").checked,
+    qrHomeworkLabel: document.getElementById("qrHomeworkLabelInput").value,
+    qrHomeworkShow: document.getElementById("qrHomeworkShowInput").checked,
+    showLunchDuty: document.getElementById("showLunchDutyInput").checked
+  };
+}
+
+function saveToSpreadsheet() {
+  const btn = document.querySelector(".saveBtn");
+  btn.disabled = true; btn.textContent = "保存中...";
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.withSuccessHandler(msg => {
+      alert(msg); btn.disabled = false; btn.textContent = "スプレッドシートに一時保存";
+    }).saveTsushinData(getFormData());
+  } else {
+    alert("ローカル環境のためシミュレーション保存しました");
+    btn.disabled = false; btn.textContent = "スプレッドシートに一時保存";
+  }
+}
+
+function loadFromSpreadsheet() {
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.withSuccessHandler(data => {
+      if (data.issue) document.getElementById("issueInput").value = data.issue;
+      if (data.issueDate) document.getElementById("dateInput").value = data.issueDate; 
+      if (data.columnTitle) document.getElementById("columnTitle").value = data.columnTitle;
+      if (data.columnBody) document.getElementById("columnBody").value = data.columnBody;
+      if (data.notice) document.getElementById("noticeInput").value = data.notice;
+      if (data.qrRentaku) document.getElementById("qrRentakuUrl").value = data.qrRentaku;
+      if (data.qrHomework) document.getElementById("qrHomeworkUrl").value = data.qrHomework;
+      if (data.upperType) document.getElementById("upperTypeSelect").value = data.upperType;
+      if (data.upperColTitle) document.getElementById("upperColTitleInput").value = data.upperColTitle;
+      if (data.upperColBody) document.getElementById("upperColBodyInput").value = data.upperColBody;
+      if (data.upperHasPhoto !== undefined) document.getElementById("upperHasPhotoInput").checked = data.upperHasPhoto;
+      if (data.upperPhotoCaption) document.getElementById("upperPhotoCaptionInput").value = data.upperPhotoCaption;
+      if (data.lowerType) document.getElementById("lowerTypeSelect").value = data.lowerType;
+      if (data.lowerColTitle) document.getElementById("lowerColTitleInput").value = data.lowerColTitle;
+      if (data.lowerColBody) document.getElementById("lowerColBodyInput").value = data.lowerColBody;
+      if (data.photoCaption) document.getElementById("photoCaptionInput").value = data.photoCaption; 
+      if (data.upperWeek) document.getElementById("upperWeekSelect").value = data.upperWeek;
+      if (data.lowerWeek) document.getElementById("lowerWeekSelect").value = data.lowerWeek;
+      if (data.qrRenrakuLabel) document.getElementById("qrRenrakuLabelInput").value = data.qrRenrakuLabel;
+      if (data.qrRenrakuShow !== undefined) document.getElementById("qrRenrakuShowInput").checked = data.qrRenrakuShow;
+      if (data.qrHomeworkLabel) document.getElementById("qrHomeworkLabelInput").value = data.qrHomeworkLabel;
+      if (data.qrHomeworkShow !== undefined) document.getElementById("qrHomeworkShowInput").checked = data.qrHomeworkShow;
+      if (data.showLunchDuty !== undefined) document.getElementById("showLunchDutyInput").checked = data.showLunchDuty;
+
+      toggleUpperInputs();
+      toggleLowerInputs();
+      toggleUpperPhotoSettings();
+      loadWeeks(); 
+    }).loadTsushinData();
+  }
+}
+
+function changeThemeColor() {
+  const colorVal = document.getElementById("colorSelect").value;
+  const [themeColor, bgColor] = colorVal.split(",");
+  document.documentElement.style.setProperty('--theme-color', themeColor);
+  document.documentElement.style.setProperty('--bg-color', bgColor);
+}
+
+function initWeekSelects() {
+  const upper = document.getElementById("upperWeekSelect");
+  const lower = document.getElementById("lowerWeekSelect");
+  upper.innerHTML = ""; lower.innerHTML = "";
+  for (let i = 1; i <= 60; i++) {
+    const optU = document.createElement("option"); optU.value = i; optU.textContent = `第 ${i} 週`;
+    if (i === 11) optU.selected = true; 
+    upper.appendChild(optU);
+    const optL = document.createElement("option"); optL.value = i; optL.textContent = `第 ${i} 週`;
+    if (i === 12) optL.selected = true;
+    lower.appendChild(optL);
+  }
+}
+
+function updateQRCodes() {
+  const rUrl = encodeURIComponent(document.getElementById("qrRentakuUrl").value);
+  const hUrl = encodeURIComponent(document.getElementById("qrHomeworkUrl").value);
+  document.getElementById("qrRenrakuImg").innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${rUrl}">`;
+  document.getElementById("qrHomeworkImg").innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${hUrl}">`;
+}
+
+// 写真調整（今週のひとこま用 & トピックス用）
+function updatePhotoTransform() {
+  const zoom = document.getElementById("zoomRange").value;
+  const xPos = document.getElementById("xPosRange").value;
+  const yPos = document.getElementById("yPosRange").value;
+  const img = document.querySelector("#photoPreview img");
+  if (img) img.style.transform = `scale(${zoom}) translate(${xPos}px, ${yPos}px)`;
+}
+
+function updateUpperPhotoTransform() {
+  const zoom = document.getElementById("upperZoomRange").value;
+  const xPos = document.getElementById("upperXPosRange").value;
+  const yPos = document.getElementById("upperYPosRange").value;
+  const img = document.querySelector("#upperPhotoPreview img");
+  if (img) img.style.transform = `scale(${zoom}) translate(${xPos}px, ${yPos}px)`;
+}
+
+function loadWeeks() {
+  const upperWeek = Number(document.getElementById("upperWeekSelect").value);
+  const lowerWeek = Number(document.getElementById("lowerWeekSelect").value);
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.withSuccessHandler(data => { nextWeekData = data; render(); }).getWeekPlan(upperWeek);
+    google.script.run.withSuccessHandler(data => { followingWeekData = data; render(); }).getWeekPlan(lowerWeek);
+  } else {
+    nextWeekData = { dates: ["6/15(月)","6/16(火)","6/17(水)","6/18(木)","6/19(金)","6/20(土)","6/21(日)"], event:["","","","","オープンスクール","",""], p1:["全校朝会","外国語","水泳","図工","外国語","",""], p2:["算数","水泳","理科","図工","書写","",""], p3:["総合","算数","国語","社会","算数","",""], p4:["総合","体育","社会","音楽","水泳","",""], p5:["学活","家庭科","算数","水泳","社会","",""], p6:["書写","家庭科","クラブ","算数","学活","",""], dismissal:["15:20","15:05","15:20","15:05","15:20","",""], homework:["□漢字\n□計算\n□日記\n□音読","□漢字\n□計算\n□日記\n□音読","□漢字\n□計算\n□日記\n□音読","□漢字\n□計算\n□日記\n□音読","□できていない宿題\n□音読\n□日記\n□自学","",""], isHoliday:[false,false,false,false,false,true,true], lunchDuty:"B当番" };
+    followingWeekData = { dates: ["6/22(月)","6/23(火)","6/24(水)","6/25(木)","6/26(金)","6/27(土)","6/28(日)"], event:["元気アップ週間","","","歯科検診","","",""], p1:["国語","家庭科","理科","図工","外国語","",""], p2:["算数","家／国","理科","図／国","体育","",""], p3:["総合","算数","音／体","社会","算数","",""], p4:["総合","水泳","水泳","音楽","国語","",""], p5:["道徳","外国語","算数","理科","社会","",""], p6:["国語","国語","ク・委","算数","学活","",""], dismissal:["15:20","15:05","14:25","15:05","15:20","",""], homework:["","","","","","",""], isHoliday:[false,false,false,false,false,true,true], lunchDuty:"A当番" };
+    render();
+  }
+}
+
+function buildTableHTML(tableId) {
+  return `
+    <table id="${tableId}">
+      <thead><tr class="date-header"></tr></thead>
+      <tbody></tbody>
+    </table>`;
+}
+
+function fillWeekTable(tableId, data, showHomework) {
+  const table = document.getElementById(tableId);
+  if (!table || !data || !data.dates) return;
+  const tbody = table.querySelector("tbody");
+  tbody.innerHTML = "";
+  
+  const headerTr = table.querySelector(".date-header");
+  let headerHtml = `<th class="row-label">曜 日</th>`;
+  for(let i = 0; i < 7; i++) {
+    const isHoliday = data.isHoliday && data.isHoliday[i];
+    headerHtml += `<th${isHoliday ? ' class="holiday-col"' : ''}>${data.dates[i] || ""}</th>`;
+  }
+  headerTr.innerHTML = headerHtml;
+
+  const rows = [
+    { label: "行事等", key: "event", baseClass: "event-cell" },
+    { label: "1", key: "p1", baseClass: "period-cell" }, 
+    { label: "2", key: "p2", baseClass: "period-cell" },
+    { label: "3", key: "p3", baseClass: "period-cell" }, 
+    { label: "4", key: "p4", baseClass: "period-cell" },
+    { label: "5", key: "p5", baseClass: "period-cell" }, 
+    { label: "6", key: "p6", baseClass: "period-cell" },
+    { label: "下校", key: "dismissal", baseClass: "dismissal-cell" }
+  ];
+  if (showHomework) rows.push({ label: "宿題", key: "homework", baseClass: "homework-cell" });
+
+  rows.forEach(row => {
+    const tr = document.createElement("tr");
+    let tds = `<td class="row-label">${row.label}</td>`;
+    for (let i = 0; i < 7; i++) {
+      let val = data[row.key] ? data[row.key][i] : "";
+      const isHoliday = data.isHoliday && data.isHoliday[i];
+      const isSuiei = val && String(val).includes("水泳");
+      
+      let classes = [];
+      if (isHoliday) {
+        classes.push("holiday-col");
+      } else {
+        if (row.baseClass) classes.push(row.baseClass);
+        if (isSuiei) classes.push("suiei-highlight");
+      }
+      const classAttr = classes.length > 0 ? ` class="${classes.join(' ')}"` : '';
+      if (row.key === 'event' && val && !isHoliday) {
+        tds += `<td${classAttr}><span class="event-text">${val}</span></td>`;
+      } else {
+        tds += `<td${classAttr}>${isHoliday ? "" : (val || "")}</td>`;
+      }
+    }
+    tr.innerHTML = tds;
+    tbody.appendChild(tr);
+  });
+}
+
+function adjustEventFontSize() {
+  const elements = document.querySelectorAll('.event-cell');
+  elements.forEach(cell => {
+    const textSpan = cell.querySelector('.event-text');
+    if (!textSpan) return;
+    textSpan.style.fontSize = '13px';
+    textSpan.style.display = 'inline-block';
+    const cellWidth = cell.clientWidth - 4; 
+    const textWidth = textSpan.scrollWidth;
+    if (textWidth > cellWidth && cellWidth > 0) {
+      const newSize = Math.floor((cellWidth / textWidth) * 13);
+      textSpan.style.fontSize = Math.max(7, newSize) + 'px';
+    }
+  });
+}
+
+// 画像のキャッシュ状態を保持するための変数
+let loadedUpperPhotoData = null;
+
+function render() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const formattedDate = String(now.getFullYear()) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+  const upperWeek = document.getElementById("upperWeekSelect") ? document.getElementById("upperWeekSelect").value : "0";
+  document.title = `${year}_今週のお知らせ_week${upperWeek}_${formattedDate}`;
+
+  document.getElementById("pMainTitle").textContent = document.getElementById("mainTitleInput").value;
+  document.getElementById("pIssue").textContent = document.getElementById("issueInput").value;
+  document.getElementById("pDate").textContent = document.getElementById("dateInput").value;
+  document.getElementById("pClass").textContent = document.getElementById("classInput").value;
+  document.getElementById("pColumnTitle").textContent = document.getElementById("columnTitle").value;
+  document.getElementById("pColumnBody").textContent = document.getElementById("columnBody").value;
+  document.getElementById("pPhotoCaption").textContent = document.getElementById("photoCaptionInput").value;
+
+  // 上段エリア表示のレンダリング
+  const upperType = document.getElementById("upperTypeSelect").value;
+  const pUpperWrapper = document.getElementById("pUpperWrapper");
+  
+  if (upperType === "table") {
+    pUpperWrapper.innerHTML = `<div class="sectionTitle">${document.getElementById("upperTitleInput").value}</div><div class="sectionSubNote">※変更することもあります</div>` + buildTableHTML("nextWeekTable");
+    fillWeekTable("nextWeekTable", nextWeekData, true);
+  } else {
+    // 特設コラム・トピックス（写真あり・なし分岐）
+    const hasPhoto = document.getElementById("upperHasPhotoInput").checked;
+    const colTitle = document.getElementById("upperColTitleInput").value;
+    const colBody = document.getElementById("upperColBodyInput").value;
+    const photoCaption = document.getElementById("upperPhotoCaptionInput").value;
+
+    if (hasPhoto) {
+      // 2列（写真付きスタイル）
+      pUpperWrapper.innerHTML = `
+        <div class="sectionTitle">トピックス</div>
+        <div class="columnBox">
+          <div class="photoContainer">
+            <div class="photoSpace" id="upperPhotoPreview"><span class="photoHint">写真スペース</span></div>
+            <div class="photoCaption" id="pUpperPhotoCaption">${photoCaption}</div>
+          </div>
+          <div class="columnText">
+            <h2>${colTitle}</h2>
+            <p>${colBody}</p>
+          </div>
+        </div>`;
+      
+      // 画像がすでに読み込まれている場合は再描画
+      const ps = document.getElementById("upperPhotoPreview");
+      if (loadedUpperPhotoData) {
+        ps.innerHTML = `<img src="${loadedUpperPhotoData}">`;
+        ps.classList.add("has-photo");
+        updateUpperPhotoTransform();
+      }
+    } else {
+      // 1列（写真なし・テキストのみのスタイル）高さ自動調整
+      pUpperWrapper.innerHTML = `
+        <div class="sectionTitle">トピックス</div>
+        <div class="freeColumnBox">
+          <h2>${colTitle}</h2>
+          <p>${colBody}</p>
+        </div>`;
+    }
+  }
+
+  const lowerType = document.getElementById("lowerTypeSelect").value;
+  const pLowerWrapper = document.getElementById("pLowerWrapper");
+  if (lowerType === "table") {
+    pLowerWrapper.innerHTML = `<div class="sectionTitle" style="margin-top: 0;">${document.getElementById("lowerTitleInput").value}</div>` + buildTableHTML("followingWeekTable");
+    fillWeekTable("followingWeekTable", followingWeekData, false);
+  } else {
+    pLowerWrapper.innerHTML = `
+      <div class="sectionTitle" style="margin-top: 0;">お知らせ</div>
+      <div class="freeColumnBox">
+        <h2>${document.getElementById("lowerColTitleInput").value}</h2>
+        <p>${document.getElementById("lowerColBodyInput").value}</p>
+      </div>`;
+  }
+
+  // 給食当番表示の切り替え
+  const showLunchDuty = document.getElementById("showLunchDutyInput").checked;
+  const pLunchDuty = document.getElementById("pLunchDuty");
+  const pDutyBox = document.getElementById("pDutyBox");
+  
+  if (showLunchDuty) {
+    pDutyBox.classList.remove("hide-duty");
+    const dutyValue = nextWeekData?.lunchDuty || "未設定";
+    pLunchDuty.textContent = dutyValue;
+    pDutyBox.classList.remove("duty-a", "duty-b");
+    if (dutyValue.includes("A")) {
+      pDutyBox.classList.add("duty-a");
+    } else if (dutyValue.includes("B")) {
+      pDutyBox.classList.add("duty-b");
+    }
+  } else {
+    pDutyBox.classList.add("hide-duty");
+  }
+  
+  const noticeList = document.getElementById("pNoticeList");
+  noticeList.innerHTML = "";
+  document.getElementById("noticeInput").value.split("\n").filter(v=>v.trim()).forEach(v => {
+    const li = document.createElement("li"); li.textContent = v; noticeList.appendChild(li);
+  });
+  
+  const showR = document.getElementById("qrRenrakuShowInput").checked;
+  const showH = document.getElementById("qrHomeworkShowInput").checked;
+  
+  document.getElementById("pQrRenrakuLabel").textContent = document.getElementById("qrRenrakuLabelInput").value;
+  document.getElementById("pQrHomeworkLabel").textContent = document.getElementById("qrHomeworkLabelInput").value;
+  
+  document.getElementById("pQrRenrakuBlock").classList.toggle("qr-hide", !showR);
+  document.getElementById("pQrHomeworkBlock").classList.toggle("qr-hide", !showH);
+  
+  const container = document.getElementById("pQrContainer");
+  if (!showR && !showH) {
+    container.classList.add("qr-all-hide");
+  } else {
+    container.classList.remove("qr-all-hide");
+  }
+
+  updateQRCodes();
+  setTimeout(adjustEventFontSize, 50);
+}
+
+// 写真入力イベント（今週のひとこま用）
+document.getElementById("photoInput").addEventListener("change", e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = event => {
+    const ps = document.getElementById("photoPreview");
+    ps.innerHTML = `<img src="${event.target.result}">`;
+    ps.classList.add("has-photo");
+    updatePhotoTransform();
+  };
+  reader.readAsDataURL(file);
+});
+
+// 写真入力イベント（上段トピックス用）
+document.getElementById("upperPhotoInput").addEventListener("change", e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = event => {
+    loadedUpperPhotoData = event.target.result;
+    const ps = document.getElementById("upperPhotoPreview");
+    if (ps) {
+      ps.innerHTML = `<img src="${loadedUpperPhotoData}">`;
+      ps.classList.add("has-photo");
+      updateUpperPhotoTransform();
+    }
+  };
+  reader.readAsDataURL(file);
+});
+
+// 各調整スライダーのイベント紐付け
+["zoomRange", "xPosRange", "yPosRange"].forEach(id => document.getElementById(id).addEventListener("input", updatePhotoTransform));
+["upperZoomRange", "upperXPosRange", "upperYPosRange"].forEach(id => {
+  document.getElementById(id).addEventListener("input", updateUpperPhotoTransform);
+});
+
+// 各種設定項目の入力変更監視リスト（追加項目も追記）
+[
+  "mainTitleInput", "issueInput", "dateInput", "classInput", "columnTitle", "columnBody", 
+  "noticeInput", "qrRentakuUrl", "qrHomeworkUrl", "upperTitleInput", "upperColTitleInput", 
+  "upperColBodyInput", "upperHasPhotoInput", "upperPhotoCaptionInput", "lowerTitleInput", 
+  "lowerColTitleInput", "lowerColBodyInput", "photoCaptionInput", "qrRenrakuLabelInput", 
+  "qrRenrakuShowInput", "qrHomeworkLabelInput", "qrHomeworkShowInput", "showLunchDutyInput"
+].forEach(id => {
+  document.getElementById(id).addEventListener("input", render);
+  document.getElementById(id).addEventListener("change", render);
+});
+
+document.getElementById("colorSelect").addEventListener("change", changeThemeColor);
+window.addEventListener('resize', adjustEventFontSize);
+
+initWeekSelects();
+changeThemeColor();
+loadFromSpreadsheet(); 
+</script>
+</body>
+</html>

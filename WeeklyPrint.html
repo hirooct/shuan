@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* 1. 全体共通設定 */
+    * { box-sizing: border-box; }
+    
+    /* 🌟 印刷時はブラウザ側の標準余白をゼロにし、CSS側で完全制御します */
+    @page { 
+      size: A4 portrait; 
+      margin: 0; 
+    }
+    
+    html, body { 
+      margin: 0; 
+      padding: 0; 
+      background: #f1f5f9; 
+      font-family: 'BIZ UDPGothic', sans-serif; 
+      color: #1e293b; 
+    }
+    
+    /* ==========================================================
+       【アプリ画面表示用の設定】
+       ========================================================== */
+    .print-container { 
+      display: flex; 
+      flex-direction: column; 
+      min-height: 100vh;
+      max-width: 210mm;
+      margin: 10px auto 40px auto; 
+      background: white; 
+      padding: 15px;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+    
+    /* 操作バー */
+    .no-print-bar {
+      background: #1e293b; color: white; padding: 10px 20px; display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); height: 45px; position: sticky; top:0; z-index:100;
+    }
+    .no-print-bar select { padding: 5px; border-radius: 4px; border: none; font-weight: bold; font-size: 13px; background: white; font-family: inherit; }
+    .btn { border: none; padding: 5px 10px; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; font-family: inherit; white-space: nowrap; }
+    
+    /* ボタン色設定 */
+    .btn-print { background: #38bdf8; color: #0f172a; }
+    .btn-save { background: #10b981; color: white; margin-left: auto; }
+    .btn-save:disabled { background: #64748b; color: #cbd5e1; cursor: not-allowed; opacity: 0.6; }
+    
+    .btn-load-default { background: #f59e0b; color: white; }
+    .btn-open-modal { background: #a855f7; color: white; }
+    .btn-update-slide { background: #6366f1; color: white; } 
+    .btn-open-slide { background: #06b6d4; color: white; } 
+    
+    .btn-nav { background: #475569; color: white; padding: 5px 10px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-family: inherit; }
+    .btn-nav:hover { background: #64748b; }
+
+    /* モーダル */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 200; }
+    .modal-box { background: white; padding: 20px; border-radius: 8px; width: 320px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); color: #1e293b; }
+    .modal-box h3 { margin-top: 0; margin-bottom: 15px; font-size: 14px; border-bottom: 2px solid #a855f7; padding-bottom: 5px; }
+    .modal-field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+    .modal-field label { font-size: 11px; font-weight: bold; color: #475569; }
+    .modal-field input[type="date"], .modal-field input[type="text"], .modal-field select { padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; width: 100%; font-family: inherit; }
+    .modal-buttons { display: flex; gap: 8px; margin-top: 15px; justify-content: flex-end; }
+    .btn-modal-close { background: #64748b; color: white; }
+    .btn-modal-submit { background: #a855f7; color: white; }
+
+    /* メインテーブル */
+    .header-table { width: 100%; margin-bottom: 10px; border-collapse: collapse; }
+    .header-center { font-size: 18px; font-weight: bold; text-align: center; letter-spacing: 6px; border-bottom: 2px solid #1e293b; padding-bottom: 4px; }
+    .main-table { width: 100%; border-collapse: collapse; table-layout: fixed; flex-grow: 1; } /* 🌟 縦に引き伸ばせるよう flex-grow を追加 */
+    .main-table th, .main-table td { border: 1px solid #111; padding: 0; font-size: 11px; vertical-align: top; word-break: break-all; position: relative; }
+    .col-label { width: 8%; background: #f1f5f9; text-align: center; vertical-align: middle; font-weight: bold; font-size: 11px; }
+    .day-header { background: #e2e8f0; text-align: center; font-weight: bold; padding: 6px 0; font-size: 11px; }
+    
+    .period-row { min-height: 90px; height: auto; } 
+    .period-row td { height: 90px; }
+    .row-break { background: #f8fafc; font-weight: bold; color: #475569; height: 26px; text-align: center; }
+    .row-short { min-height: 32px; height: auto; }
+    .row-homework { min-height: 90px; height: auto; }
+    .row-homework td { height: 90px; } 
+    .row-memo { min-height: 130px; height: auto; } 
+    .row-memo td { height: 130px; }
+
+    .cell-box { display: flex; flex-direction: column; height: 100%; width: 100%; overflow: hidden; }
+    .subject-combo-container { display: flex; width: 100%; border-bottom: 1px dashed #cbd5e1; background: #fff; position: relative; }
+    .subject-input { flex-grow: 1; border: none; font-weight: bold; text-align: center; font-size: 11px; padding: 3px 1px; width: 70%; background: transparent; font-family: inherit; }
+    .subject-select { width: 20px; border: none; background: #f1f5f9; cursor: pointer; color: #475569; font-size: 10px; text-align: center; padding:0; }
+    .edit-trigger { width: 100%; height: 100%; border: none; padding: 5px; font-size: 11px; font-family: inherit; resize: none; line-height: 1.35; background: transparent; display: block; overflow: hidden; }
+    .center-input { text-align: center; vertical-align: middle; }
+    .left-input { text-align: left; }
+
+    /* 教科別パステルカラー */
+    .bg-sub-0 { background-color: #fee2e2 !important; color: #991b1b; } 
+    .bg-sub-1 { background-color: #e0f2fe !important; color: #0369a1; } 
+    .bg-sub-2 { background-color: #f0fdf4 !important; color: #166534; } 
+    .bg-sub-3 { background-color: #fef9c3 !important; color: #854d0e; } 
+    .bg-sub-4 { background-color: #fae8ff !important; color: #86198f; } 
+    .bg-sub-5 { background-color: #ffedd5 !important; color: #9a3412; } 
+    .bg-sub-6 { background-color: #e0e7ff !important; color: #3730a3; } 
+    .bg-sub-7 { background-color: #ecfdf5 !important; color: #065f46; } 
+    .bg-sub-8 { background-color: #fff1f2 !important; color: #9f1239; } 
+    .bg-sub-9 { background-color: #f1f5f9 !important; color: #334155; } 
+
+    /* 休日列 */
+    .holiday-column,
+    .holiday-column .cell-box,
+    .holiday-column .subject-combo-container,
+    .holiday-column .edit-trigger,
+    .holiday-column .subject-input,
+    .holiday-column .subject-select {
+      background-color: #cbd5e1 !important;
+      color: #64748b !important; 
+      cursor: not-allowed;
+    }
+    #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #1e293b; font-size: 14px; background: rgba(255,255,255,0.9); padding: 10px 20px; border-radius: 8px; border: 1px solid #cbd5e1; z-index: 1000; }
+
+    /* ==========================================================
+       【印刷時専用設定】
+       ========================================================== */
+    @media print {
+      .no-print-bar, .modal-overlay { display: none !important; }
+      body { background: white; margin: 0; padding: 0; height: 100vh; overflow: hidden !important; font-family: 'BIZ UDPGothic', sans-serif !important; }
+      
+      /* 🌟 固定値(255mm)を廃止。用紙の全高（100vh）に合わせてきれいに収め、周囲に適切な余白を確保します */
+      .print-container { 
+        margin: 0 !important; 
+        padding: 8mm 10mm 10mm 10mm !important; /* 上・右・下・左の印刷余白を設定 */
+        width: 100vw !important; 
+        height: 100vh !important; 
+        box-shadow: none; 
+        overflow: hidden !important; 
+        display: flex !important;
+        flex-direction: column !important;
+      }
+      
+      /* 🌟 テーブル要素が縦幅いっぱいに引き伸ばされるように指定 */
+      .main-table {
+        height: 100% !important;
+      }
+      
+      .main-table th, .main-table td { font-size: 8.5px !important; }
+      .edit-trigger { font-size: 8.5px !important; padding: 1px 2px; line-height: 1.15; overflow: hidden !important; }
+      
+      /* 🌟 パーセンテージや固定の高さを解除し、テーブルの自動伸長(ブラウザの自動配分)に任せます */
+      .period-row, .period-row td,
+      .row-homework, .row-homework td,
+      .row-memo, .row-memo td { 
+        height: auto !important; 
+        min-height: 0 !important; 
+      }
+      
+      .subject-select { display: none; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print-bar">
+    <span>週案Web</span>
+    
+    <button class="btn-nav" onclick="changeWeek(-1)">◀</button>
+    <select id="weekSelect" onchange="handleWeekSelectChange(this.value)">
+      <script>for(let i=1;i<=52;i++) document.write(`<option value="${i}">第 ${i} 週</option>`);</script>
+    </select>
+    <button class="btn-nav" onclick="changeWeek(1)">▶</button>
+    
+    <button class="btn btn-load-default" onclick="applyDefaultTimetable()">📅 基本時間割読込</button>
+    <button class="btn btn-open-modal" onclick="openRegModal()">✨ 休日・行事登録</button>
+    <button class="btn btn-update-slide" onclick="executeSlideUpdate()">🖼️ スライド更新</button>
+    
+    <button class="btn" id="btnOpenSlide" style="background: #e2e8f0; color: #94a3b8; cursor: not-allowed;" onclick="openLatestSlide()" disabled>🔗 スライドを開く</button>
+    
+    <button class="btn btn-print" onclick="window.print()">🖨️ 印刷</button>
+    <button class="btn btn-save" id="btnSave" onclick="saveToSpreadsheet()" disabled>💾 保存</button>
+  </div>
+
+  <div class="modal-overlay" id="regModal" style="display: none;">
+    <div class="modal-box">
+      <h3>行事・休日の新規登録</h3>
+      <div class="modal-field">
+        <label>登録種別</label>
+        <select id="regType">
+          <option value="event">行事 (F・G列へ)</option>
+          <option value="holiday">休日 (H・I列へ)</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>日付選択</label>
+        <input type="date" id="regDate">
+      </div>
+      <div class="modal-field">
+        <label>名称</label>
+        <input type="text" id="regName" placeholder="例：創立記念日など">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-modal-close" onclick="closeRegModal()">キャンセル</button>
+        <button class="btn btn-modal-submit" onclick="submitConfigReg()">シートに登録</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading">データを読み込み中...</div>
+
+  <div class="print-container" id="contentArea" style="display:none;">
+    <table class="header-table">
+      <tr>
+        <td style="width:25%; font-size:10px; font-weight:bold;" id="lblYear"></td>
+        <td class="header-center">週 案</td>
+        <td style="width:35%; text-align:right; font-size:10px; color:#475569;" id="lblDuration"></td>
+      </tr>
+    </table>
+    <table class="main-table" oninput="setDirty(true)">
+      <thead>
+        <tr id="headerRow">
+          <th class="col-label">校時</th>
+          <th class="day-header" id="th0"></th><th class="day-header" id="th1"></th><th class="day-header" id="th2"></th>
+          <th class="day-header" id="th3"></th><th class="day-header" id="th4"></th><th class="day-header" id="th5"></th><th class="day-header" id="th6"></th>
+        </tr>
+      </thead>
+      <tbody id="timetableBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    let globalConfigList = [];
+    let globalColIndices = [];
+    let currentLoadedWeek = 1;
+    let globalSlideUrl = ""; 
+    
+    let isDirty = false;
+
+    function setDirty(dirty) {
+      isDirty = dirty;
+      document.getElementById('btnSave').disabled = !dirty;
+    }
+
+    function confirmDiscardChanges() {
+      if (isDirty) {
+        return confirm("編集中のデータが保存されていません。移動してよろしいですか？");
+      }
+      return true;
+    }
+
+    function adjustFontSize(el) {
+      if (!el) return;
+      let baseSize = window.matchMedia('print').matches ? 8.5 : 11;
+      el.style.fontSize = baseSize + 'px';
+      let count = 0;
+      while ((el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) && baseSize > 6 && count < 10) {
+        baseSize -= 0.5;
+        el.style.fontSize = baseSize + 'px';
+        count++;
+      }
+    }
+
+    function triggerAllFontAdjustments() {
+      setTimeout(() => {
+        const elements = document.querySelectorAll('.edit-trigger, .subject-input');
+        elements.forEach(el => adjustFontSize(el));
+      }, 50);
+    }
+
+   function executeSlideUpdate() {
+  // 💡 既存のconfirmを廃止し、Web画面上にオーバーレイで選択ボタンを表示します
+  const overlay = document.createElement('div');
+  overlay.id = 'slide-mode-overlay';
+  overlay.style = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000;';
+  
+  overlay.innerHTML = `
+    <div style="background: white; padding: 25px; border-radius: 12px; width: 360px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); color: #1e293b;">
+      <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 15px; border-bottom: 2px solid #6366f1; padding-bottom: 8px;">スライド作成モードの選択</h3>
+      <p style="font-size: 13px; font-weight: bold; margin-bottom: 20px; line-height: 1.5;">どちらの日付の予定・宿題で<br>スライドを作成しますか？</p>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button id="btn-slide-today" style="padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; background: #2563eb; color: white;">☀️ 本日のスライドを作成</button>
+        <button id="btn-slide-next" style="padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; background: #0d9488; color: white;">⏰ 次の授業日のスライドを作成</button>
+        <button id="btn-slide-cancel" style="padding: 8px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; background: #64748b; color: white; margin-top: 5px;">キャンセル</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // 各ボタンのイベントリスナー設定
+  document.getElementById('btn-slide-today').onclick = () => sendToGas('today');
+  document.getElementById('btn-slide-next').onclick = () => sendToGas('next');
+  document.getElementById('btn-slide-cancel').onclick = () => document.body.removeChild(overlay);
+
+  // 実際のGAS呼び出し処理
+  function sendToGas(mode) {
+    document.body.removeChild(overlay); // 選択画面を消す
+    
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('loading').innerText = "スライドを生成中...";
+
+    // 先ほど用意したGASの「executeSlideGeneration(mode)」に直接モードを飛ばす
+    google.script.run.withSuccessHandler(function(msg) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('loading').innerText = "データを読み込み中...";
+      alert(msg || "スライドを更新しました！");
+    }).withFailureHandler(function(err) {
+      document.getElementById('loading').style.display = 'none';
+      alert("エラーが発生しました: " + err);
+    }).executeSlideGeneration(mode);
+  }
+}
+
+    function openLatestSlide() {
+      if (globalSlideUrl) {
+        window.open(globalSlideUrl, '_blank');
+      } else {
+        alert("スライドのURLが見つかりません。");
+      }
+    }
+
+    function changeWeek(offset) {
+      let nextWeek = parseInt(currentLoadedWeek, 10) + offset;
+      if (nextWeek < 1) nextWeek = 1;
+      if (nextWeek > 52) nextWeek = 52;
+      
+      if (!confirmDiscardChanges()) {
+        document.getElementById('weekSelect').value = currentLoadedWeek;
+        return;
+      }
+
+      document.getElementById('weekSelect').value = nextWeek;
+      loadWeeklyData(nextWeek);
+    }
+
+    function handleWeekSelectChange(weekNum) {
+      if (!confirmDiscardChanges()) {
+        document.getElementById('weekSelect').value = currentLoadedWeek;
+        return;
+      }
+      loadWeeklyData(weekNum);
+    }
+
+    function openRegModal() {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('regDate').value = today;
+      document.getElementById('regName').value = "";
+      document.getElementById('regModal').style.display = 'flex';
+    }
+    
+    function closeRegModal() {
+      document.getElementById('regModal').style.display = 'none';
+    }
+    
+    function submitConfigReg() {
+      const type = document.getElementById('regType').value;
+      const date = document.getElementById('regDate').value;
+      const name = document.getElementById('regName').value.trim();
+      if(!date || !name) { alert("日付と名称は必須です"); return; }
+      document.getElementById('loading').style.display = 'block';
+      closeRegModal();
+      google.script.run.withSuccessHandler(function(result) {
+        document.getElementById('loading').style.display = 'none';
+        alert(result.message);
+        setDirty(false); 
+        loadWeeklyData(currentLoadedWeek);
+      }).addNewConfigEventOrHoliday(type, date, name);
+    }
+
+    function getDynamicSubjectClass(subjectText) {
+      if (!subjectText || globalConfigList.length === 0) return "";
+      for (let i = 0; i < globalConfigList.length; i++) {
+        if (subjectText.includes(globalConfigList[i])) return "bg-sub-" + (i % 10);
+      }
+      return "";
+    }
+
+    function onSubjectSelectChange(selectEl) {
+      const container = selectEl.parentElement;
+      const inputEl = container.querySelector('.subject-input');
+      inputEl.value = selectEl.value;
+      updateSubjectColor(inputEl);
+      adjustFontSize(inputEl);
+      setDirty(true); 
+    }
+
+    function updateSubjectColor(inputEl) {
+      const container = inputEl.parentElement;
+      container.className = "subject-combo-container";
+      const colorClass = getDynamicSubjectClass(inputEl.value);
+      if(colorClass) container.classList.add(colorClass);
+    }
+
+    window.onload = function() {
+      google.script.run.withSuccessHandler(function(num) {
+        document.getElementById('weekSelect').value = num;
+        loadWeeklyData(num);
+      }).getActualCurrentWeekNum();
+
+      google.script.run.withSuccessHandler(function(url) {
+        if (url) {
+          globalSlideUrl = url;
+          const btn = document.getElementById('btnOpenSlide');
+          btn.disabled = false;
+          btn.className = "btn btn-open-slide";
+          btn.style = ""; 
+        }
+      }).getSlideUrl(); 
+
+      window.onbeforeprint = triggerAllFontAdjustments;
+      window.onafterprint = triggerAllFontAdjustments;
+
+      window.addEventListener('beforeunload', function (e) {
+        if (isDirty) {
+          e.preventDefault();
+          e.returnValue = ''; 
+        }
+      });
+    };
+
+    function loadWeeklyData(weekNum) {
+      currentLoadedWeek = parseInt(weekNum, 10);
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('contentArea').style.display = 'none';
+
+      google.script.run.withSuccessHandler(function(data) {
+        if(data.error) { alert(data.error); return; }
+        document.getElementById('loading').style.display = 'none';
+        
+        document.getElementById('lblYear').innerText = data.year + "年度";
+        document.getElementById('lblDuration').innerText = "期間: " + data.startDate + " 〜 " + data.endDate + " (第 " + data.weekNum + " 週)";
+        
+        globalConfigList = data.colorSubjects || [];
+        globalColIndices = data.colIndices;
+
+        const hFlags = data.holidayRow.map(c => c.includes("休") ? " holiday-column" : "");
+        for(let i=0;i<7;i++) {
+          document.getElementById('th'+i).innerHTML = data.days[i];
+          document.getElementById('th'+i).className = "day-header" + hFlags[i];
+        }
+
+        let selectOptionsHtml = '<option value=""></option>';
+        if (data.dropdownSubjects) data.dropdownSubjects.forEach(sub => { selectOptionsHtml += `<option value="${sub}">${sub}</option>`; });
+        let leavingOptionsHtml = '<option value=""></option>';
+        if (data.leavingTimes) data.leavingTimes.forEach(time => { leavingOptionsHtml += `<option value="${time}">${time}</option>`; });
+
+        const t = data.timetable;
+        let html = "";
+        const getDisabledAttr = (idx) => hFlags[idx] ? "disabled readonly" : "";
+
+        html += `<tr class="row-short"><td class="col-label">行事</td>`;
+        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><input type="text" id="event-${i}" class="edit-trigger center-input" value="${t.event[i]}" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></td>`;
+        html += `</tr>`;
+
+        html += `<tr class="row-short"><td class="col-label">朝</td>`;
+        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><input type="text" id="morning-${i}" class="edit-trigger center-input" value="${t.morning[i]}" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></td>`;
+        html += `</tr>`;
+
+        const periods = [
+          { label: "1", id: "p1", data: t.p1, isBreak: false },
+          { label: "2", id: "p2", data: t.p2, isBreak: false },
+          { label: "中間", id: "rest", data: t.rest, isBreak: true },
+          { label: "3", id: "p3", data: t.p3, isBreak: false },
+          { label: "4", id: "p4", data: t.p4, isBreak: false },
+          { label: "給食", id: "lunch", data: t.lunch, isBreak: true },
+          { label: "そうじ", id: "clean", data: t.clean, isBreak: true },
+          { label: "昼休み", id: "recess", data: t.recess, isBreak: true },
+          { label: "5", id: "p5", data: t.p5, isBreak: false },
+          { label: "6", id: "p6", data: t.p6, isBreak: false }
+        ];
+
+        periods.forEach(p => {
+          if(p.isBreak) {
+            html += `<tr class="row-break"><td class="col-label">${p.label}</td>`;
+            for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><input type="text" id="${p.id}-${i}" class="edit-trigger center-input" value="${p.data[i]}" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></td>`;
+            html += `</tr>`;
+          } else {
+            html += `<tr class="period-row"><td class="col-label">${p.label}</td>`;
+            for(let i=0;i<7;i++) {
+              const cellData = p.data[i];
+              const colorClass = getDynamicSubjectClass(cellData.subject);
+              const disabledStr = getDisabledAttr(i);
+              html += `<td class="${hFlags[i]}">
+                <div class="cell-box">
+                  <div class="subject-combo-container ${colorClass}">
+                    <input type="text" id="${p.id}-sub-${i}" class="subject-input" value="${cellData.subject}" oninput="updateSubjectColor(this); adjustFontSize(this);" placeholder="" ${disabledStr}>
+                    <select class="subject-select" onchange="onSubjectSelectChange(this)" ${disabledStr}>${selectOptionsHtml}</select>
+                  </div>
+                  <textarea id="${p.id}-cont-${i}" class="edit-trigger" oninput="adjustFontSize(this)" ${disabledStr}>${cellData.content}</textarea>
+                </div>
+              </td>`;
+            }
+            html += `</tr>`;
+          }
+        });
+
+        html += `<tr class="row-short"><td class="col-label">下校</td>`;
+        for(let i=0;i<7;i++) {
+          const disabledStr = getDisabledAttr(i);
+          html += `<td class="${hFlags[i]}">
+            <div class="subject-combo-container" style="border-bottom:none; height:100%;">
+              <input type="text" id="leaving-${i}" class="subject-input edit-trigger center-input" value="${t.leaving[i]}" oninput="adjustFontSize(this)" ${disabledStr} style="font-weight:bold; padding:4px 2px;">
+              <select class="subject-select" onchange="onSubjectSelectChange(this)" ${disabledStr}>${leavingOptionsHtml}</select>
+            </div>
+          </td>`;
+        }
+        html += `</tr>`;
+
+        html += `<tr class="row-homework"><td class="col-label">宿題</td>`;
+        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><textarea id="homework-${i}" class="edit-trigger left-input" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></textarea></td>`;
+        html += `</tr>`;
+
+        html += `<tr class="row-memo"><td class="col-label">備考</td>`;
+        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><textarea id="memo-${i}" class="edit-trigger left-input" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></textarea></td>`;
+        html += `</tr>`;
+        
+        document.getElementById('timetableBody').innerHTML = html;
+        document.getElementById('contentArea').style.display = 'block';
+        for(let i=0;i<7;i++){
+          document.getElementById(`homework-${i}`).value = t.homework[i];
+          document.getElementById(`memo-${i}`).value = t.memo[i];
+        }
+        triggerAllFontAdjustments();
+        setDirty(false); 
+      }).getWeeklyDataByNumber(weekNum);
+    }
+
+    function applyDefaultTimetable() {
+      if(!confirm("基本時間割を上書きします。よろしいですか？")) return;
+      document.getElementById('loading').style.display = 'block';
+      google.script.run.withSuccessHandler(function(defaultTimetable) {
+        document.getElementById('loading').style.display = 'none';
+        const periods = ["p1", "p2", "p3", "p4", "p5", "p6"];
+        periods.forEach(p => {
+          for(let i=0; i<7; i++) {
+            const inputEl = document.getElementById(`${p}-sub-${i}`);
+            if(inputEl && !inputEl.disabled) { inputEl.value = defaultTimetable[p][i]; updateSubjectColor(inputEl); }
+          }
+        });
+        triggerAllFontAdjustments();
+        setDirty(true); 
+        alert("基本時間割を展開しました。保存ボタンを押して確定してください。");
+      }).getDefaultTimetable();
+    }
+
+    function saveToSpreadsheet() {
+      document.getElementById('loading').style.display = 'block';
+      const getSingleRowValues = (idPrefix) => { let arr = []; for(let i=0; i<7; i++) { arr.push(document.getElementById(`${idPrefix}-${i}`).value); } return arr; };
+      const getSplitRowValues = (idPrefix) => {
+        let arr = [];
+        for(let i=0; i<7; i++) {
+          arr.push({ subject: document.getElementById(`${idPrefix}-sub-${i}`).value, content: document.getElementById(`${idPrefix}-cont-${i}`).value });
+        }
+        return arr;
+      };
+      const clientData = {
+        event: ["", "", "", "", "", "", ""], morning: getSingleRowValues('morning'),
+        p1: getSplitRowValues('p1'), p2: getSplitRowValues('p2'), rest: getSingleRowValues('rest'),
+        p3: getSplitRowValues('p3'), p4: getSplitRowValues('p4'), lunch: getSingleRowValues('lunch'),
+        clean: getSingleRowValues('clean'), recess: getSingleRowValues('recess'),
+        p5: getSplitRowValues('p5'), p6: getSplitRowValues('p6'),
+        leaving: getSingleRowValues('leaving'), homework: getSingleRowValues('homework'), memo: getSingleRowValues('memo')
+      };
+      google.script.run.withSuccessHandler(function(result) {
+        document.getElementById('loading').style.display = 'none';
+        alert("保存しました！");
+        setDirty(false); 
+        loadWeeklyData(currentLoadedWeek);
+      }).saveWeeklyData(currentLoadedWeek, globalColIndices, clientData);
+    }
+  </script>
+</body>
+</html>
