@@ -43,8 +43,14 @@ function executeSlideGeneration(mode) {
 
   let homeworkCol, scheduleCol;
 
-  // 💡 実行日が「出」の日かどうかを判定
-  const isTodaySchoolDay = (new Date(dates[schoolDayColumns[0]-1]).getTime() === now.getTime());
+  // 実行日が「出」の日かどうかを判定
+  const firstSchoolDay = new Date(dates[schoolDayColumns[0] - 1]);
+  firstSchoolDay.setHours(0, 0, 0, 0);
+  const isTodaySchoolDay = firstSchoolDay.getTime() === now.getTime();
+
+  if (mode === 'next' && isTodaySchoolDay && schoolDayColumns.length < 3) {
+    return "エラー：次の授業日の時間割を作るための授業日が不足しています。";
+  }
 
   if (mode === 'next') {
     // ⏰ 【次の日モード】
