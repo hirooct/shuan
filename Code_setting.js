@@ -1,6 +1,16 @@
 /**
  * 設定シートのデータを取得して画面に渡す
  */
+function getAppDisplaySettings_() {
+  const props = PropertiesService.getDocumentProperties();
+  return {
+    appName: props.getProperty('APP_NAME') || '週案・学級通信',
+    schoolName: props.getProperty('SCHOOL_NAME') || '',
+    className: props.getProperty('CLASS_NAME') || '',
+    teacherName: props.getProperty('TEACHER_NAME') || ''
+  };
+}
+
 function getSettingsData() {
   let currentStep = "開始";
   try {
@@ -52,7 +62,12 @@ function getSettingsData() {
     currentStep = "色変え教科(AB3:AB12)の取得";
     const colorSubjects = getSafeValues("AB3:AB12").flat();
     
+    const appSettings = getAppDisplaySettings_();
     const result = {
+      appName: appSettings.appName,
+      schoolName: appSettings.schoolName,
+      className: appSettings.className,
+      teacherName: appSettings.teacherName,
       nendo: nendo === null || nendo === undefined ? "" : String(nendo).trim(),
       nextNendo: nextNendo === null || nextNendo === undefined ? "" : String(nextNendo).trim(),
       slideUrl: slideUrl === null || slideUrl === undefined ? "" : String(slideUrl).trim(),
@@ -78,6 +93,14 @@ function saveSettingsData(data) {
   if (!sheet) return "エラー：「設定」シートが見つかりません。";
 
   try {
+    const appName = String(data.appName || '').trim() || '週案・学級通信';
+    PropertiesService.getDocumentProperties().setProperties({
+      APP_NAME: appName,
+      SCHOOL_NAME: String(data.schoolName || '').trim(),
+      CLASS_NAME: String(data.className || '').trim(),
+      TEACHER_NAME: String(data.teacherName || '').trim()
+    });
+
     sheet.getRange("A2").setValue(data.nendo);
     sheet.getRange("C2").setValue(data.nextNendo);
     sheet.getRange("U13").setValue(data.slideUrl);
@@ -97,67 +120,55 @@ function saveSettingsData(data) {
 }
 
 /**
- * GoogleカレンダーAPIを利用して指定年度と翌年度の祝日を書き込む
+ * 追加設定なしで利用できるCalendarAppから、日本の祝日を取得する
  */
 function fetchAndWriteHolidays(currentYear, nextYear) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("設定");
-  if (!sheet) return "「設定」シートが見つかりません。";
+  if (!sheet) return "エラー：「設定」シートが見つかりません。";
 
-  if (!currentYear || isNaN(currentYear) || !nextYear || isNaN(nextYear)) {
-    return "エラー：正しい4桁の西暦（年度）を指定してください。";
-  }
-
-  // 1. セル値を更新して、A3:D60をクリア
-  sheet.getRange("A2").setValue(currentYear);
-  sheet.getRange("C2").setValue(nextYear);
-  sheet.getRange("A3:D60").clearContent();
-
-  const calendarId = 'ja.japanese.official#holiday@group.v.calendar.google.com';
-
-  // 指定した年の祝日を取得して配列で返す補助関数
-  function getHolidaysForYear(year) {
-    const timeMin = new Date(year + '-01-01T00:00:00Z').toISOString();
-    const timeMax = new Date(year + '-12-31T23:59:59Z').toISOString();
-    
-    const response = Calendar.Events.list(calendarId, {
-      timeMin: timeMin,
-      timeMax: timeMax,
-      singleEvents: true,
-      orderBy: 'startTime'
-    });
-
-    if (!response.items || response.items.length === 0) return [];
-
-    return response.items
-      .filter(function(event) {
-        const summary = event.summary || "";
-        // 銀行休業日と大晦日は除外
-        return !summary.includes("銀行休業日") && !summary.includes("大晦日");
-      })
-      .map(function(event) {
-        // カレンダーの日付形式 YYYY-MM-DD を YYYY/MM/DD に変換
-        const dateStr = event.start.date.replace(/-/g, "/");
-        return [dateStr, event.summary];
-      });
+  const years = [Number(currentYear), Number(nextYear)];
+  if (years.some(year => !Number.isInteger(year) || year < 2000 || year > 2100)) {
+    return "エラー：正しい4桁の西暦を指定してください。";
   }
 
   try {
-    // 2. 指定年度（今年度）の祝日を取得して書き込み
-    const currentEvents = getHolidaysForYear(currentYear);
-    if (currentEvents.length > 0) {
-      sheet.getRange(3, 1, currentEvents.length, 2).setValues(currentEvents);
+    const calendarId = 'ja.japanese.official#holiday@group.v.calendar.google.com';
+    const calendar = CalendarApp.getCalendarById(calendarId);
+    if (!calendar) {
+      return "エラー：日本の祝日カレンダーを取得できませんでした。";
     }
 
-    // 3. 翌年度の祝日を取得して書き込み
-    const nextEvents = getHolidaysForYear(nextYear);
-    if (nextEvents.length > 0) {
+    const getHolidaysForYear = year => {
+      const start = new Date(year, 0, 1);
+      const end = new Date(year + 1, 0, 1);
+      return calendar.getEvents(start, end)
+        .filter(event => {
+          const title = event.getTitle() || "";
+          return !title.includes("銀行休業日") && !title.includes("大晦日");
+        })
+        .map(event => [
+          Utilities.formatDate(event.getStartTime(), Session.getScriptTimeZone(), "yyyy/MM/dd"),
+          event.getTitle()
+        ]);
+    };
+
+    const currentEvents = getHolidaysForYear(years[0]);
+    const nextEvents = getHolidaysForYear(years[1]);
+
+    sheet.getRange("A2").setValue(years[0]);
+    sheet.getRange("C2").setValue(years[1]);
+    sheet.getRange("A3:D60").clearContent();
+
+    if (currentEvents.length) {
+      sheet.getRange(3, 1, currentEvents.length, 2).setValues(currentEvents);
+    }
+    if (nextEvents.length) {
       sheet.getRange(3, 3, nextEvents.length, 2).setValues(nextEvents);
     }
 
-    return "【完了】Googleカレンダーから " + currentYear + "年と" + nextYear + "年の祝日を取得して書き込みました。";
-
+    return "【完了】" + years[0] + "年と" + years[1] + "年の祝日を取得しました。";
   } catch (e) {
-    return "カレンダーAPIからの取得に失敗しました。プロジェクトの設定で『Calendar API』が有効になっているか確認してください。エラー内容: " + e.toString();
+    return "祝日の取得に失敗しました: " + e.message;
   }
 }
