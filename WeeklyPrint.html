@@ -54,6 +54,8 @@
     .btn-open-modal { background: #a855f7; color: white; }
     .btn-update-slide { background: #6366f1; color: white; } 
     .btn-open-slide { background: #06b6d4; color: white; } 
+    .btn-tools { background:#0f766e; color:white; }
+    .draft-status { font-size:10px; color:#cbd5e1; min-width:92px; }
     
     .btn-nav { background: #475569; color: white; padding: 5px 10px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-family: inherit; }
     .btn-nav:hover { background: #64748b; }
@@ -157,6 +159,13 @@
       .subject-select { display: none; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
+    @media (max-width: 760px) {
+      .no-print-bar { height:auto; flex-wrap:wrap; padding:8px; }
+      .no-print-bar .btn { flex:1 1 42%; justify-content:center; min-height:38px; }
+      .draft-status { width:100%; text-align:center; }
+      .print-container { margin:0; padding:5px; min-width:720px; }
+      body { overflow-x:auto; }
+    }
   </style>
 </head>
 <body>
@@ -170,6 +179,9 @@
     <button class="btn-nav" onclick="changeWeek(1)">▶</button>
     
     <button class="btn btn-load-default" onclick="applyDefaultTimetable()">📅 基本時間割読込</button>
+    <button class="btn btn-tools" onclick="openTimetableTool()">🔁 時間割変更</button>
+    <button class="btn btn-tools" onclick="copyPreviousWeek()">📋 前週から作成</button>
+    <button class="btn btn-tools" onclick="insertQuickPhrase()">✍️ 定型文</button>
     <button class="btn btn-open-modal" onclick="openRegModal()">✨ 休日・行事登録</button>
     <button class="btn btn-update-slide" onclick="executeSlideUpdate()">🖼️ スライド更新</button>
     
@@ -177,6 +189,19 @@
     
     <button class="btn btn-print" onclick="window.print()">🖨️ 印刷</button>
     <button class="btn btn-save" id="btnSave" onclick="saveToSpreadsheet()" disabled>💾 保存</button>
+    <span class="draft-status" id="draftStatus">下書き待機中</span>
+  </div>
+
+  <div class="modal-overlay" id="timetableModal" style="display:none;">
+    <div class="modal-box" style="width:380px;">
+      <h3>時間割をまとめて変更</h3>
+      <div class="modal-field"><label>登録パターン（任意）</label><select id="toolPattern" onchange="loadSelectedPattern()"><option value="">手動で指定</option></select></div>
+      <div class="modal-field"><label>変更する日</label><select id="toolTargetDay"><option value="0">月</option><option value="1">火</option><option value="2">水</option><option value="3">木</option><option value="4">金</option></select></div>
+      <div class="modal-field"><label>使う基本時間割</label><select id="toolSourceDay"><option value="0">月曜時間割</option><option value="1">火曜時間割</option><option value="2">水曜時間割</option><option value="3">木曜時間割</option><option value="4">金曜時間割</option></select></div>
+      <div class="row" style="display:flex;gap:8px;"><div class="modal-field" style="flex:1"><label>元の開始</label><select id="toolSourceStart"></select></div><div class="modal-field" style="flex:1"><label>元の終了</label><select id="toolSourceEnd"></select></div><div class="modal-field" style="flex:1"><label>入れる先</label><select id="toolTargetStart"></select></div></div>
+      <label style="font-size:11px"><input type="checkbox" id="toolOverwrite" checked style="width:auto"> すでに入力済みの教科も上書きする</label>
+      <div class="modal-buttons"><button class="btn btn-modal-close" onclick="closeTimetableTool()">キャンセル</button><button class="btn btn-modal-submit" onclick="applyTimetableTool()">反映</button></div>
+    </div>
   </div>
 
   <div class="modal-overlay" id="regModal" style="display: none;">
@@ -233,6 +258,8 @@
     let globalSlideUrl = ""; 
     
     let isDirty = false;
+    let productivitySettings = {patterns:[], phrases:[]};
+    let draftTimer = null;
 
     function setDirty(dirty) {
       isDirty = dirty;
@@ -429,6 +456,13 @@
         }
       }).getSlideUrl(); 
 
+      google.script.run.withSuccessHandler(function(data) { productivitySettings = data || productivitySettings; }).getProductivitySettings();
+      for (let p=1;p<=6;p++) ['toolSourceStart','toolSourceEnd','toolTargetStart'].forEach(function(id) {
+        const el=document.getElementById(id); if(el.options.length<6) el.add(new Option(p+'時間目',p));
+      });
+      document.getElementById('toolSourceEnd').value='6';
+      draftTimer=setInterval(saveDraftIfNeeded,30000);
+
       window.onbeforeprint = triggerAllFontAdjustments;
       window.onafterprint = triggerAllFontAdjustments;
 
@@ -545,7 +579,71 @@
         }
         triggerAllFontAdjustments();
         setDirty(false); 
+        offerDraftRestore(currentLoadedWeek);
       }).getWeeklyDataByNumber(weekNum);
+    }
+
+    function collectWeeklyFormData() {
+      const single = id => Array.from({length:7},(_,i) => document.getElementById(id+'-'+i).value);
+      const split = id => Array.from({length:7},(_,i) => ({subject:document.getElementById(id+'-sub-'+i).value,content:document.getElementById(id+'-cont-'+i).value}));
+      return {morning:single('morning'),p1:split('p1'),p2:split('p2'),rest:single('rest'),p3:split('p3'),p4:split('p4'),lunch:single('lunch'),clean:single('clean'),recess:single('recess'),p5:split('p5'),p6:split('p6'),leaving:single('leaving'),homework:single('homework'),memo:single('memo')};
+    }
+
+    function fillWeeklyForm(data, options) {
+      options=options||{}; const periods=['p1','p2','p3','p4','p5','p6'];
+      ['morning','rest','lunch','clean','recess','leaving','homework','memo'].forEach(function(key){
+        if(options.skipNotes && (key==='homework'||key==='memo')) return;
+        for(let i=0;i<7;i++){ const el=document.getElementById(key+'-'+i); if(el&&!el.disabled) el.value=(data[key]&&data[key][i])||''; }
+      });
+      periods.forEach(function(key){ for(let i=0;i<7;i++){ const s=document.getElementById(key+'-sub-'+i),c=document.getElementById(key+'-cont-'+i); if(s&&!s.disabled){s.value=(data[key]&&data[key][i]&&data[key][i].subject)||'';c.value=(data[key]&&data[key][i]&&data[key][i].content)||'';updateSubjectColor(s);} } });
+      triggerAllFontAdjustments(); setDirty(true);
+    }
+
+    function openTimetableTool(){ const s=document.getElementById('toolPattern');s.innerHTML='<option value="">手動で指定</option>';(productivitySettings.patterns||[]).forEach(function(p,i){s.add(new Option(p.name||('パターン'+(i+1)),i));});document.getElementById('timetableModal').style.display='flex'; }
+    function closeTimetableTool(){ document.getElementById('timetableModal').style.display='none'; }
+    function loadSelectedPattern(){const v=document.getElementById('toolPattern').value;if(v==='')return;const p=productivitySettings.patterns[+v];document.getElementById('toolSourceDay').value=p.sourceDay;document.getElementById('toolSourceStart').value=p.sourceStart;document.getElementById('toolSourceEnd').value=p.sourceEnd;document.getElementById('toolTargetStart').value=p.targetStart;document.getElementById('toolOverwrite').checked=p.overwrite!==false;}
+    function applyTimetableTool(){
+      const target=+document.getElementById('toolTargetDay').value, source=+document.getElementById('toolSourceDay').value;
+      const from=+document.getElementById('toolSourceStart').value, to=+document.getElementById('toolSourceEnd').value, dest=+document.getElementById('toolTargetStart').value;
+      if(to<from || dest+(to-from)>6){alert('時間の範囲を確認してください。');return;}
+      const overwrite=document.getElementById('toolOverwrite').checked;
+      google.script.run.withSuccessHandler(function(base){
+        for(let p=from;p<=to;p++){ const targetP=dest+(p-from), el=document.getElementById('p'+targetP+'-sub-'+target); if(el&&!el.disabled&&(overwrite||!el.value)){el.value=(base['p'+p]&&base['p'+p][source])||'';updateSubjectColor(el);} }
+        setDirty(true); closeTimetableTool(); triggerAllFontAdjustments();
+      }).getDefaultTimetable();
+    }
+
+    function copyPreviousWeek(){
+      if(currentLoadedWeek<=1){alert('第1週より前はありません。');return;}
+      if(!confirm('前週の内容を現在の週へコピーしますか？\nコピー後に確認してから保存できます。'))return;
+      const skipNotes=confirm('宿題・備考を除いてコピーしますか？\n［OK］除く／［キャンセル］含める');
+      google.script.run.withSuccessHandler(function(data){ if(data.error){alert(data.error);return;} fillWeeklyForm(data.timetable,{skipNotes:skipNotes}); }).getWeeklyDataByNumber(currentLoadedWeek-1);
+    }
+
+    function insertQuickPhrase(){
+      const active=document.activeElement;
+      if(!active || !/^(INPUT|TEXTAREA)$/.test(active.tagName)){alert('先に、定型文を入れたい入力欄をクリックしてください。');return;}
+      const items=productivitySettings.phrases||[]; if(!items.length){alert('設定ページで定型文を登録してください。');return;}
+      const menu=items.map((x,i)=>(i+1)+'：'+x.name).join('\n'); const n=Number(prompt('入れる定型文の番号を入力してください。\n'+menu));
+      if(!n||!items[n-1])return; active.value+=(active.value?'\n':'')+items[n-1].text; setDirty(true); adjustFontSize(active);
+    }
+
+    function validateWeekly(data){
+      const warnings=[];
+      for(let d=0;d<5;d++){
+        const subjects=['p1','p2','p3','p4','p5','p6'].map(p=>data[p][d].subject).filter(Boolean);
+        if(subjects.length && !data.leaving[d]) warnings.push((d+1)+'日目：下校時刻が未入力');
+        ['p1','p2','p3','p4','p5','p6'].forEach(p=>{if(data[p][d].subject&&!data[p][d].content) warnings.push((d+1)+'日目 '+p.substring(1)+'時間目：学習内容が空欄');});
+      }
+      return warnings.slice(0,15);
+    }
+
+    function saveDraftIfNeeded(){
+      if(!isDirty||!document.getElementById('p1-sub-0'))return;
+      google.script.run.withSuccessHandler(function(r){if(r&&r.success)document.getElementById('draftStatus').innerText='下書き保存 '+r.savedAt;}).saveWeeklyDraft(currentLoadedWeek,collectWeeklyFormData());
+    }
+    function offerDraftRestore(week){
+      google.script.run.withSuccessHandler(function(draft){ if(draft&&draft.data&&confirm('この週には '+new Date(draft.savedAt).toLocaleString()+' の下書きがあります。復元しますか？')) fillWeeklyForm(draft.data); }).getWeeklyDraft(week);
     }
 
     function applyDefaultTimetable() {
@@ -584,6 +682,8 @@
         p5: getSplitRowValues('p5'), p6: getSplitRowValues('p6'),
         leaving: getSingleRowValues('leaving'), homework: getSingleRowValues('homework'), memo: getSingleRowValues('memo')
       };
+      const warnings=validateWeekly(clientData);
+      if(warnings.length&&!confirm('保存前の確認\n・'+warnings.join('\n・')+'\n\nこのまま保存しますか？')){document.getElementById('loading').style.display='none';return;}
       google.script.run
         .withSuccessHandler(function(result) {
           document.getElementById('loading').style.display = 'none';
@@ -593,7 +693,8 @@
           }
           alert("保存しました！");
           setDirty(false);
-          loadWeeklyData(currentLoadedWeek);
+          document.getElementById('draftStatus').innerText='保存済み';
+          google.script.run.withSuccessHandler(function(){loadWeeklyData(currentLoadedWeek);}).deleteWeeklyDraft(currentLoadedWeek);
         })
         .withFailureHandler(function(err) {
           document.getElementById('loading').style.display = 'none';
