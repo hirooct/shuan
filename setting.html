@@ -71,7 +71,30 @@
 
     <div class="container">
       <h1>⚙️ システム設定</h1>
-      
+
+      <h2>🏫 基本情報</h2>
+      <div class="row">
+        <div class="field">
+          <label>アプリ名</label>
+          <input type="text" id="appName" placeholder="例：週案・学級通信">
+        </div>
+        <div class="field">
+          <label>学校名</label>
+          <input type="text" id="schoolName" placeholder="例：○○小学校">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>学年・組</label>
+          <input type="text" id="className" placeholder="例：6年3組">
+        </div>
+        <div class="field">
+          <label>担任名</label>
+          <input type="text" id="teacherName" placeholder="例：山本">
+        </div>
+      </div>
+
+      <h2>📆 年度・祝日</h2>
       <div class="row">
         <div class="field">
           <label>指定年度 西暦 (A2)</label>
@@ -82,7 +105,7 @@
           <input type="text" id="nextNendo" placeholder="例: 2027">
         </div>
         <div class="field-btn">
-          <button type="button" class="btn-holiday" onclick="updateHolidays()">📅 内閣府CSVから祝日データを取得</button>
+          <button type="button" class="btn-holiday" onclick="updateHolidays()">📅 Googleカレンダーから祝日を取得</button>
         </div>
       </div>
 
@@ -209,6 +232,10 @@
             return;
           }
           
+          document.getElementById('appName').value = data.appName || "週案・学級通信";
+          document.getElementById('schoolName').value = data.schoolName || "";
+          document.getElementById('className').value = data.className || "";
+          document.getElementById('teacherName').value = data.teacherName || "";
           document.getElementById('nendo').value = data.nendo || "";
           document.getElementById('nextNendo').value = data.nextNendo || "";
           document.getElementById('slideUrl').value = data.slideUrl || "";
@@ -321,6 +348,10 @@
         document.getElementById('loading').style.display = 'flex';
 
         var data = {
+          appName: document.getElementById('appName').value,
+          schoolName: document.getElementById('schoolName').value,
+          className: document.getElementById('className').value,
+          teacherName: document.getElementById('teacherName').value,
           nendo: document.getElementById('nendo').value,
           nextNendo: document.getElementById('nextNendo').value,
           slideUrl: document.getElementById('slideUrl').value,
