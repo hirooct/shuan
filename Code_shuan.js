@@ -3,9 +3,10 @@
  */
 
 function doGet(e) {
-  // URLの末尾に「?p=ファイル名」があればそれを開き、なければ「index」を開く
-  var page = e.parameter.p || 'index';
-  
+  const allowedPages = ['index', 'WeeklyPrint', 'tsushin', 'setting'];
+  const requestedPage = e && e.parameter ? e.parameter.p : '';
+  const page = allowedPages.includes(requestedPage) ? requestedPage : 'index';
+
   return HtmlService.createTemplateFromFile(page)
       .evaluate()
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -120,7 +121,10 @@ function getWeeklyDataByNumber(targetWeekNum) {
     let foundIndex = -1;
     for (let col = 1; col < lastCol; col++) {
       const cellVal = mainData[9][col];
-      if (cellVal instanceof Date && cellVal.getMonth() === targetDate.getMonth() && cellVal.getDate() === targetDate.getDate()) {
+      if (cellVal instanceof Date &&
+          cellVal.getFullYear() === targetDate.getFullYear() &&
+          cellVal.getMonth() === targetDate.getMonth() &&
+          cellVal.getDate() === targetDate.getDate()) {
         foundIndex = col; break;
       }
     }
@@ -267,44 +271,68 @@ function saveWeeklyData(weekNum, colIndices, clientData) {
 
 // Webアプリから行事・休日を設定シートの最後に追加する関数
 function addNewConfigEventOrHoliday(type, dateStr, nameStr) {
+  const lock = LockService.getDocumentLock();
   try {
+    lock.waitLock(10000);
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const configSheet = ss.getSheetByName("設定");
     if (!configSheet) return { error: "設定シートが見つかりません。" };
-    
-    const targetDate = new Date(dateStr);
-    if (isNaN(targetDate.getTime())) return { error: "日付の形式が正しくありません。" };
-    
-    if (type === 'event') {
-      const fValues = configSheet.getRange("F1:F").getValues();
-      let lastRowF = 1;
-      for (let i = fValues.length - 1; i >= 0; i--) {
-        if (fValues[i][0] !== "") { lastRowF = i + 1; break; }
-      }
-      const nextRow = Math.max(lastRowF + 1, 3);
-      
-      configSheet.getRange(nextRow, 6).setValue(targetDate);
-      configSheet.getRange(nextRow, 7).setValue(nameStr);
-      return { success: true, message: "行事を登録しました。" };
-      
-    } else if (type === 'holiday') {
-      const hValues = configSheet.getRange("H1:H").getValues();
-      let lastRowH = 1;
-      for (let i = hValues.length - 1; i >= 0; i--) {
-        if (hValues[i][0] !== "") { lastRowH = i + 1; break; }
-      }
-      const nextRow = Math.max(lastRowH + 1, 3);
-      
-      configSheet.getRange(nextRow, 8).setValue(targetDate);
-      configSheet.getRange(nextRow, 9).setValue(nameStr);
-      return { success: true, message: "休日を登録しました。" };
-    }
-    
-    return { error: "不正な種別です。" };
-  } catch(e) {
-    return { error: e.toString() };
-  }
 
+    if (type !== 'event' && type !== 'holiday') {
+      return { error: "登録種別が正しくありません。" };
+    }
+
+    const name = String(nameStr || "").trim();
+    if (!name) return { error: "名称を入力してください。" };
+
+    const parts = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!parts) return { error: "日付の形式が正しくありません。" };
+
+    const targetDate = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+    if (targetDate.getFullYear() !== Number(parts[1]) ||
+        targetDate.getMonth() !== Number(parts[2]) - 1 ||
+        targetDate.getDate() !== Number(parts[3])) {
+      return { error: "存在しない日付です。" };
+    }
+
+    const dateCol = type === 'event' ? 6 : 8;
+    const nameCol = dateCol + 1;
+    const startRow = 3;
+    const lastRow = Math.max(configSheet.getLastRow(), startRow - 1);
+    const rowCount = Math.max(lastRow - startRow + 1, 0);
+    const existing = rowCount > 0
+      ? configSheet.getRange(startRow, dateCol, rowCount, 2).getValues()
+      : [];
+
+    const targetTime = targetDate.getTime();
+    const duplicate = existing.some(row => {
+      if (!(row[0] instanceof Date)) return false;
+      const d = new Date(row[0]);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() === targetTime && String(row[1] || "").trim() === name;
+    });
+    if (duplicate) {
+      return { error: "同じ日付・名称がすでに登録されています。" };
+    }
+
+    let nextRow = startRow;
+    for (let i = 0; i < existing.length; i++) {
+      if (existing[i][0] !== "" || existing[i][1] !== "") nextRow = startRow + i + 1;
+    }
+
+    configSheet.getRange(nextRow, dateCol, 1, 2)
+      .setValues([[targetDate, name]]);
+    configSheet.getRange(nextRow, dateCol).setNumberFormat("yyyy/MM/dd");
+    SpreadsheetApp.flush();
+
+    const label = type === 'event' ? "行事" : "休日";
+    return { success: true, message: label + "を登録しました。" };
+  } catch (e) {
+    return { error: "登録に失敗しました: " + e.message };
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
 }
 
 function getSlideUrl() {
