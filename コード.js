@@ -58,84 +58,34 @@ function onOpen() {
 }
 
 /**
- * 週案・設定・通信データシートの特定のデータ範囲を初期化（クリア）する関数
+ * スプレッドシート側から実行する場合も、安全な初期化処理へ統一する
  */
 function initializeWeeklyPlan() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const targetSheetName = "週案";
-  const configSheetName = "設定";
-  const dataSheetName = "通信データ";
-  
-  const sheet = ss.getSheetByName(targetSheetName);
-  const configSheet = ss.getSheetByName(configSheetName);
-  const dataSheet = ss.getSheetByName(dataSheetName);
-  
-  if (!sheet) {
-    Browser.msgBox("エラー", `「${targetSheetName}」シートが見つかりません。`, Browser.Buttons.OK);
-    return;
-  }
-  if (!configSheet) {
-    Browser.msgBox("エラー", `「${configSheetName}」シートが見つかりません。`, Browser.Buttons.OK);
-    return;
-  }
-  if (!dataSheet) {
-    Browser.msgBox("エラー", `「${dataSheetName}」シートが見つかりません。`, Browser.Buttons.OK);
-    return;
-  }
-  
-  // ユーザーへの確認アラート（誤操作防止）
-  const response = Browser.msgBox("確認", "指定されたすべてのシートのデータを初期化してもよろしいですか？", Browser.Buttons.YES_NO);
-  if (response !== "yes") {
-    return; // 「いいえ」が押された場合は処理を中断
-  }
+  const first = Browser.msgBox(
+    '配付用初期化',
+    '入力データを初期化します。シート構造と数式は残りますが、入力内容は元に戻せません。続けますか？',
+    Browser.Buttons.YES_NO
+  );
+  if (first !== 'yes') return;
 
-  // ==========================================
-  // 1. 【週案シート】のクリア処理
-  // ==========================================
-  const lastColumn = sheet.getLastColumn();
-  if (lastColumn >= 2) { // B列（2列目）以降が存在する場合
-    // ① 9行目のB列から最終列までをクリア
-    sheet.getRange(9, 2, 1, lastColumn - 1).clearContent();
-    
-    // ② B12行目から最終列・32行目までのクリア（12行目から21行分）
-    sheet.getRange(12, 2, 21, lastColumn - 1).clearContent();
-  }
-  
-  // ==========================================
-  // 2. 【設定シート】のクリア処理
-  // ==========================================
-  const configLastRow = configSheet.getLastRow();
-  
-  // ① F列, G列, H列, I列の2行目から下をクリア
-  if (configLastRow >= 2) {
-    const numRowsToClear = configLastRow - 2 + 1; // 2行目から最終行までの行数
-    configSheet.getRange(2, 6, numRowsToClear, 1).clearContent(); // F列 (6列目)
-    configSheet.getRange(2, 7, numRowsToClear, 1).clearContent(); // G列 (7列目)
-    configSheet.getRange(2, 8, numRowsToClear, 1).clearContent(); // H列 (8列目)
-    configSheet.getRange(2, 9, numRowsToClear, 1).clearContent(); // I列 (9列目)
-  }
-  
-  // ② AB列の3行目から下をクリア
-  if (configLastRow >= 3) {
-    const numRowsToClearAB = configLastRow - 3 + 1; // 3行目から最終行までの行数
-    configSheet.getRange(3, 28, numRowsToClearAB, 1).clearContent(); // AB列 (28列目)
-  }
-  
-  // ③ 固定範囲のクリア
-  configSheet.getRange("M3:P4").clearContent(); // M3:P4
-  configSheet.getRange("V3:Z8").clearContent(); // V3:Z8
-  configSheet.getRange("U13").clearContent();   // U13
-  
- // ==========================================
-  // 3. 【通信データシート】のクリア処理
-  // ==========================================
-  const dataLastRow = dataSheet.getLastRow();
-  // B列の1行目から下をクリア（データが存在する場合のみ）
-  if (dataLastRow >= 1) {
-    const numRowsToClearData = dataLastRow - 1 + 1; // 1行目から最終行までの行数（つまり dataLastRow と同じ）
-    dataSheet.getRange(1, 2, numRowsToClearData, 1).clearContent(); // B列 (2列目)の1行目からクリア
-  }
-  
-  // 完了メッセージ
-  Browser.msgBox("完了", "すべての指定範囲の初期化が完了しました。", Browser.Buttons.OK);
+  const confirmText = Browser.inputBox(
+    '確認文字の入力',
+    '本当に初期化する場合だけ「初期化する」と入力してください。',
+    Browser.Buttons.OK_CANCEL
+  );
+  if (confirmText === 'cancel') return;
+
+  const finalConfirm = Browser.msgBox(
+    '最終確認',
+    '本当に初期化しても大丈夫ですか？この操作は元に戻せません。',
+    Browser.Buttons.YES_NO
+  );
+  if (finalConfirm !== 'yes') return;
+
+  const result = initializeForDistribution(confirmText);
+  Browser.msgBox(
+    result.success ? '完了' : '初期化しませんでした',
+    result.message || result.error || '処理結果を確認できませんでした。',
+    Browser.Buttons.OK
+  );
 }
