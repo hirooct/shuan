@@ -105,6 +105,17 @@ function getWeekPlan(week) {
     }
     result.homework.push(homeworkStr);
   }
+  // 設定ページで選択した項目だけを学級通信へ渡す。
+  const fields = typeof getTsushinFieldSettings_ === 'function'
+    ? getTsushinFieldSettings_()
+    : { event: true, timetable: true, dismissal: true, homework: true, lunchDuty: true };
+  if (!fields.event) result.event = result.event.map(function() { return ''; });
+  if (!fields.timetable) ['p1','p2','p3','p4','p5','p6'].forEach(function(key) {
+    result[key] = result[key].map(function() { return ''; });
+  });
+  if (!fields.dismissal) result.dismissal = result.dismissal.map(function() { return ''; });
+  if (!fields.homework) result.homework = result.homework.map(function() { return ''; });
+  if (!fields.lunchDuty) result.lunchDuty = '';
   return result;
 }
 
