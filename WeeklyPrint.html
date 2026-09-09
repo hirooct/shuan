@@ -339,7 +339,12 @@
     }
 
     function openRegModal() {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0')
+      ].join('-');
       document.getElementById('regDate').value = today;
       document.getElementById('regName').value = "";
       document.getElementById('regModal').style.display = 'flex';
@@ -353,15 +358,35 @@
       const type = document.getElementById('regType').value;
       const date = document.getElementById('regDate').value;
       const name = document.getElementById('regName').value.trim();
-      if(!date || !name) { alert("日付と名称は必須です"); return; }
+      if (!date || !name) {
+        alert("日付と名称は必須です。");
+        return;
+      }
+
+      const submitButton = document.querySelector('.btn-modal-submit');
+      submitButton.disabled = true;
       document.getElementById('loading').style.display = 'block';
-      closeRegModal();
-      google.script.run.withSuccessHandler(function(result) {
-        document.getElementById('loading').style.display = 'none';
-        alert(result.message);
-        setDirty(false); 
-        loadWeeklyData(currentLoadedWeek);
-      }).addNewConfigEventOrHoliday(type, date, name);
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          submitButton.disabled = false;
+          document.getElementById('loading').style.display = 'none';
+
+          if (!result || result.error) {
+            alert(result && result.error ? result.error : "登録結果を確認できませんでした。");
+            return;
+          }
+
+          closeRegModal();
+          alert(result.message || "登録しました。");
+          loadWeeklyData(currentLoadedWeek);
+        })
+        .withFailureHandler(function(err) {
+          submitButton.disabled = false;
+          document.getElementById('loading').style.display = 'none';
+          alert("登録に失敗しました: " + (err && err.message ? err.message : err));
+        })
+        .addNewConfigEventOrHoliday(type, date, name);
     }
 
     function getDynamicSubjectClass(subjectText) {
@@ -446,7 +471,7 @@
         const getDisabledAttr = (idx) => hFlags[idx] ? "disabled readonly" : "";
 
         html += `<tr class="row-short"><td class="col-label">行事</td>`;
-        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><input type="text" id="event-${i}" class="edit-trigger center-input" value="${t.event[i]}" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></td>`;
+        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><input type="text" id="event-${i}" class="edit-trigger center-input" value="${t.event[i]}" title="行事の追加は「休日・行事登録」から行います" readonly></td>`;
         html += `</tr>`;
 
         html += `<tr class="row-short"><td class="col-label">朝</td>`;
@@ -551,19 +576,29 @@
         return arr;
       };
       const clientData = {
-        event: ["", "", "", "", "", "", ""], morning: getSingleRowValues('morning'),
+        morning: getSingleRowValues('morning'),
         p1: getSplitRowValues('p1'), p2: getSplitRowValues('p2'), rest: getSingleRowValues('rest'),
         p3: getSplitRowValues('p3'), p4: getSplitRowValues('p4'), lunch: getSingleRowValues('lunch'),
         clean: getSingleRowValues('clean'), recess: getSingleRowValues('recess'),
         p5: getSplitRowValues('p5'), p6: getSplitRowValues('p6'),
         leaving: getSingleRowValues('leaving'), homework: getSingleRowValues('homework'), memo: getSingleRowValues('memo')
       };
-      google.script.run.withSuccessHandler(function(result) {
-        document.getElementById('loading').style.display = 'none';
-        alert("保存しました！");
-        setDirty(false); 
-        loadWeeklyData(currentLoadedWeek);
-      }).saveWeeklyData(currentLoadedWeek, globalColIndices, clientData);
+      google.script.run
+        .withSuccessHandler(function(result) {
+          document.getElementById('loading').style.display = 'none';
+          if (!result || result.error) {
+            alert(result && result.error ? result.error : "保存結果を確認できませんでした。");
+            return;
+          }
+          alert("保存しました！");
+          setDirty(false);
+          loadWeeklyData(currentLoadedWeek);
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('loading').style.display = 'none';
+          alert("保存に失敗しました: " + (err && err.message ? err.message : err));
+        })
+        .saveWeeklyData(currentLoadedWeek, globalColIndices, clientData);
     }
   </script>
 </body>
