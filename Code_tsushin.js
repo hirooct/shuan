@@ -3,18 +3,28 @@
  * 週案シートから指定された週のデータを取得し、縦型表示用に整形して返す
  */
 function getWeekPlan(week) {
+  const plans = getWeekPlans([week]);
+  return plans[String(Number(week))] || {};
+}
+
+/** 複数週を1回のシート読込で返す。 */
+function getWeekPlans(weeks) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("週案");
-  
   if (!sheet) return {};
 
   const lastRow = Math.min(sheet.getLastRow(), 35);
-  // 【修正】取得列数の制限を撤廃してシート全域を取得（または500列程度まで拡張）
-  const lastColumn = sheet.getLastColumn(); 
+  const lastColumn = sheet.getLastColumn();
   if (lastRow < 10 || lastColumn < 7) return {};
-
   const values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
-  
+  const result = {};
+  (weeks || []).forEach(function(week) {
+    result[String(Number(week))] = buildWeekPlanFromValues_(week, values, lastColumn);
+  });
+  return result;
+}
+
+function buildWeekPlanFromValues_(week, values, lastColumn) {
   // 8行目(インデックス7)から週番号を検索
   let weekStartCol = -1;
   const targetWeek = Number(week); // 数値化して確実に比較
@@ -127,30 +137,19 @@ function loadTsushinData() {
   const sheet = ss.getSheetByName("通信データ");
   if (!sheet) return {};
   
-  return {
-    issue: sheet.getRange("B1").getValue(),
-    columnTitle: sheet.getRange("B2").getValue(),
-    columnBody: sheet.getRange("B3").getValue(),
-    notice: sheet.getRange("B4").getValue(),
-    qrRentaku: sheet.getRange("B5").getValue(),
-    qrHomework: sheet.getRange("B6").getValue(),
-    upperType: sheet.getRange("B7").getValue() || "table",
-    upperColTitle: sheet.getRange("B8").getValue() || "上段コラム",
-    upperColBody: sheet.getRange("B9").getValue() || "",
-    lowerType: sheet.getRange("B10").getValue() || "table",
-    lowerColTitle: sheet.getRange("B11").getValue() || "下段コラム",
-    lowerColBody: sheet.getRange("B12").getValue() || "",
-    photoCaption: sheet.getRange("B13").getValue() || "",
-    upperWeek: sheet.getRange("B14").getValue() || "11",
-    lowerWeek: sheet.getRange("B15").getValue() || "12",
-    qrRenrakuLabel: sheet.getRange("B16").getValue() || "連絡帳",
-    qrRenrakuShow: sheet.getRange("B17").getValue() !== false, 
-    qrHomeworkLabel: sheet.getRange("B18").getValue() || "宿題チェック",
-    qrHomeworkShow: sheet.getRange("B19").getValue() !== false,
-    
-    // 【新規拡張】B20セルから発行日を読み込み
-    issueDate: sheet.getRange("B20").getValue() || ""
-  };
+  const v = sheet.getRange('B1:B20').getValues().map(function(row) { return row[0]; });
+  return { issue:v[0], columnTitle:v[1], columnBody:v[2], notice:v[3], qrRentaku:v[4], qrHomework:v[5],
+    upperType:v[6]||'table', upperColTitle:v[7]||'上段コラム', upperColBody:v[8]||'', lowerType:v[9]||'table',
+    lowerColTitle:v[10]||'下段コラム', lowerColBody:v[11]||'', photoCaption:v[12]||'', upperWeek:v[13]||'11',
+    lowerWeek:v[14]||'12', qrRenrakuLabel:v[15]||'連絡帳', qrRenrakuShow:v[16]!==false,
+    qrHomeworkLabel:v[17]||'宿題チェック', qrHomeworkShow:v[18]!==false, issueDate:v[19]||'' };
+}
+
+function loadTsushinInitialData() {
+  const form = loadTsushinData();
+  const upperWeek = Number(form.upperWeek || 11);
+  const lowerWeek = Number(form.lowerWeek || 12);
+  return { form: form, plans: getWeekPlans([upperWeek, lowerWeek]) };
 }
 
 /**
@@ -161,28 +160,11 @@ function saveTsushinData(data) {
   const sheet = ss.getSheetByName("通信データ");
   if (!sheet) return "エラー：『通信データ』シートが見つかりません。";
   
-  sheet.getRange("B1").setValue(data.issue);
-  sheet.getRange("B2").setValue(data.columnTitle);
-  sheet.getRange("B3").setValue(data.columnBody);
-  sheet.getRange("B4").setValue(data.notice);
-  sheet.getRange("B5").setValue(data.qrRentaku);
-  sheet.getRange("B6").setValue(data.qrHomework);
-  sheet.getRange("B7").setValue(data.upperType);
-  sheet.getRange("B8").setValue(data.upperColTitle);
-  sheet.getRange("B9").setValue(data.upperColBody);
-  sheet.getRange("B10").setValue(data.lowerType);
-  sheet.getRange("B11").setValue(data.lowerColTitle);
-  sheet.getRange("B12").setValue(data.lowerColBody);
-  sheet.getRange("B13").setValue(data.photoCaption);
-  sheet.getRange("B14").setValue(data.upperWeek);
-  sheet.getRange("B15").setValue(data.lowerWeek);
-  sheet.getRange("B16").setValue(data.qrRenrakuLabel);
-  sheet.getRange("B17").setValue(data.qrRenrakuShow);
-  sheet.getRange("B18").setValue(data.qrHomeworkLabel);
-  sheet.getRange("B19").setValue(data.qrHomeworkShow);
-  
-  // 【新規拡張】B20セルへ発行日を書き込み
-  sheet.getRange("B20").setValue(data.issueDate);
+  const values = [data.issue,data.columnTitle,data.columnBody,data.notice,data.qrRentaku,data.qrHomework,
+    data.upperType,data.upperColTitle,data.upperColBody,data.lowerType,data.lowerColTitle,data.lowerColBody,
+    data.photoCaption,data.upperWeek,data.lowerWeek,data.qrRenrakuLabel,data.qrRenrakuShow,
+    data.qrHomeworkLabel,data.qrHomeworkShow,data.issueDate].map(function(value){return [value];});
+  sheet.getRange('B1:B20').setValues(values);
   
   return "スプレッドシートに保存しました！";
 }
