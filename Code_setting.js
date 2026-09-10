@@ -12,6 +12,11 @@ function getAppDisplaySettings_() {
 }
 
 function getSettingsData() {
+  const cache = CacheService.getDocumentCache();
+  const cached = cache.get('SETTINGS_DATA_V1');
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
   let currentStep = "開始";
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -78,6 +83,7 @@ function getSettingsData() {
       colorSubjects: colorSubjects
     };
     
+    cache.put('SETTINGS_DATA_V1', JSON.stringify(result), 600);
     return result;
   } catch (e) {
     throw new Error(`[GASエラー発生位置: ${currentStep}] ${e.toString()}`);
@@ -112,11 +118,22 @@ function saveSettingsData(data) {
     sheet.getRange("M8:M22").setValues(data.dismissal.map(v => [v]));
     sheet.getRange("V3:Z8").setValues(data.timetable);
     sheet.getRange("AB3:AB12").setValues(data.colorSubjects.map(v => [v]));
-    
+    clearShuanCaches_();
     return "設定を保存しました！";
   } catch (e) {
     return "保存エラー: " + e.toString();
   }
+}
+
+/** 設定画面の2種類の保存を1回の通信で完了する。 */
+function saveAllSettingsData(data, productivityData) {
+  const settingsResult = saveSettingsData(data);
+  if (String(settingsResult).indexOf('エラー') === 0 || String(settingsResult).indexOf('保存エラー') === 0) {
+    return { error: settingsResult };
+  }
+  const productivityResult = saveProductivitySettings(productivityData || {});
+  if (productivityResult && productivityResult.error) return productivityResult;
+  return { success: true, message: '設定を保存しました！' };
 }
 
 /**
@@ -166,6 +183,8 @@ function fetchAndWriteHolidays(currentYear, nextYear) {
     if (nextEvents.length) {
       sheet.getRange(3, 3, nextEvents.length, 2).setValues(nextEvents);
     }
+
+    clearShuanCaches_();
 
     return "【完了】" + years[0] + "年と" + years[1] + "年の祝日を取得しました。";
   } catch (e) {
