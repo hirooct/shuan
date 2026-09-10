@@ -409,7 +409,8 @@ function saveToSpreadsheet() {
 
 function loadFromSpreadsheet() {
   if (typeof google !== 'undefined' && google.script && google.script.run) {
-    google.script.run.withSuccessHandler(data => {
+    google.script.run.withSuccessHandler(bundle => {
+      const data = bundle.form || {};
       if (data.issue) document.getElementById("issueInput").value = data.issue;
       if (data.issueDate) document.getElementById("dateInput").value = data.issueDate; 
       if (data.columnTitle) document.getElementById("columnTitle").value = data.columnTitle;
@@ -437,8 +438,12 @@ function loadFromSpreadsheet() {
       toggleUpperInputs();
       toggleLowerInputs();
       toggleUpperPhotoSettings();
-      loadWeeks(); 
-    }).loadTsushinData();
+      const upperWeek = Number(document.getElementById("upperWeekSelect").value);
+      const lowerWeek = Number(document.getElementById("lowerWeekSelect").value);
+      nextWeekData = (bundle.plans || {})[String(upperWeek)] || {};
+      followingWeekData = (bundle.plans || {})[String(lowerWeek)] || {};
+      render();
+    }).loadTsushinInitialData();
   }
 }
 
@@ -491,8 +496,11 @@ function loadWeeks() {
   const upperWeek = Number(document.getElementById("upperWeekSelect").value);
   const lowerWeek = Number(document.getElementById("lowerWeekSelect").value);
   if (typeof google !== 'undefined' && google.script && google.script.run) {
-    google.script.run.withSuccessHandler(data => { nextWeekData = data; render(); }).getWeekPlan(upperWeek);
-    google.script.run.withSuccessHandler(data => { followingWeekData = data; render(); }).getWeekPlan(lowerWeek);
+    google.script.run.withSuccessHandler(plans => {
+      nextWeekData = plans[String(upperWeek)] || {};
+      followingWeekData = plans[String(lowerWeek)] || {};
+      render();
+    }).getWeekPlans([upperWeek, lowerWeek]);
   } else {
     nextWeekData = { dates: ["6/15(月)","6/16(火)","6/17(水)","6/18(木)","6/19(金)","6/20(土)","6/21(日)"], event:["","","","","オープンスクール","",""], p1:["全校朝会","外国語","水泳","図工","外国語","",""], p2:["算数","水泳","理科","図工","書写","",""], p3:["総合","算数","国語","社会","算数","",""], p4:["総合","体育","社会","音楽","水泳","",""], p5:["学活","家庭科","算数","水泳","社会","",""], p6:["書写","家庭科","クラブ","算数","学活","",""], dismissal:["15:20","15:05","15:20","15:05","15:20","",""], homework:["□漢字\n□計算\n□日記\n□音読","□漢字\n□計算\n□日記\n□音読","□漢字\n□計算\n□日記\n□音読","□漢字\n□計算\n□日記\n□音読","□できていない宿題\n□音読\n□日記\n□自学","",""], isHoliday:[false,false,false,false,false,true,true], lunchDuty:"B当番" };
     followingWeekData = { dates: ["6/22(月)","6/23(火)","6/24(水)","6/25(木)","6/26(金)","6/27(土)","6/28(日)"], event:["元気アップ週間","","","歯科検診","","",""], p1:["国語","家庭科","理科","図工","外国語","",""], p2:["算数","家／国","理科","図／国","体育","",""], p3:["総合","算数","音／体","社会","算数","",""], p4:["総合","水泳","水泳","音楽","国語","",""], p5:["道徳","外国語","算数","理科","社会","",""], p6:["国語","国語","ク・委","算数","学活","",""], dismissal:["15:20","15:05","14:25","15:05","15:20","",""], homework:["","","","","","",""], isHoliday:[false,false,false,false,false,true,true], lunchDuty:"A当番" };
