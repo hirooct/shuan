@@ -153,6 +153,7 @@ function restoreAppBackup(fileId, confirmText) {
     const backups = parseJsonProperty_(props, SHUAN_PRODUCTIVITY_KEYS.BACKUPS, []);
     const selected = backups.filter(function(item) { return item.id === String(fileId); })[0];
     if (selected && selected.metadata) props.setProperties(selected.metadata);
+    clearShuanCaches_();
     SpreadsheetApp.flush();
     return { success: true, message: 'バックアップから復元しました。復元直前の状態も自動保存しています。' };
   } catch(e) { return { error: '復元に失敗しました: ' + e.message }; }
