@@ -229,7 +229,7 @@
       <div class="feature-panel">
         <p style="font-size:12px">スプレッドシート全体を自分のドライブへコピーします。復元前にも自動バックアップします。</p>
         <div class="feature-actions"><button type="button" class="btn-feature" onclick="createBackupNow()">今すぐバックアップ</button><button type="button" class="btn-feature" onclick="loadBackups()">一覧を更新</button></div>
-        <div id="backupList" style="margin-top:10px"></div>
+        <div id="backupList" style="margin-top:10px">必要なときだけ「一覧を更新」を押してください。</div>
       </div>
 
       <div class="btn-area">
@@ -384,7 +384,6 @@
           loadSystemStatus();
           loadConfigEntries();
           loadProductivitySettings();
-          loadBackups();
 
         } catch (jsError) {
           showError("表示構築エラー: " + jsError.message);
@@ -665,7 +664,7 @@
 
         google.script.run
           .withSuccessHandler(function(res) {
-            alert(res); // 「設定を保存しました！」を表示
+            alert(res && res.message ? res.message : (res && res.error ? res.error : res));
             // 💡 ホワイトアウトの原因となるリロードを廃止し、ローディング画面を閉じるだけに修正
             document.getElementById('loading').style.display = 'none';
           })
@@ -673,8 +672,7 @@
             alert("保存に失敗しました: " + err.message);
             document.getElementById('loading').style.display = 'none';
           })
-          .saveSettingsData(data);
-        saveProductivity();
+          .saveAllSettingsData(data, collectProductivity());
       }
     </script>
   </body>
