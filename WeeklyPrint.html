@@ -442,22 +442,21 @@
     }
 
     window.onload = function() {
-      google.script.run.withSuccessHandler(function(num) {
-        document.getElementById('weekSelect').value = num;
-        loadWeeklyData(num);
-      }).getActualCurrentWeekNum();
-
-      google.script.run.withSuccessHandler(function(url) {
-        if (url) {
-          globalSlideUrl = url;
+      google.script.run.withSuccessHandler(function(initial) {
+        productivitySettings = initial.productivity || productivitySettings;
+        productivitySettings.defaultTimetable = initial.defaultTimetable || {};
+        globalSlideUrl = initial.slideUrl || '';
+        if (globalSlideUrl) {
           const btn = document.getElementById('btnOpenSlide');
           btn.disabled = false;
           btn.className = "btn btn-open-slide";
-          btn.style = ""; 
+          btn.style = "";
         }
-      }).getSlideUrl(); 
-
-      google.script.run.withSuccessHandler(function(data) { productivitySettings = data || productivitySettings; }).getProductivitySettings();
+        document.getElementById('weekSelect').value = initial.weekNum;
+        loadWeeklyData(initial.weekNum, { weekly: initial.weekly, draft: initial.draft });
+      }).withFailureHandler(function(err) {
+        document.getElementById('loading').innerText = '読み込みに失敗しました: ' + (err.message || err);
+      }).getWeeklyPageInitialData();
       // ツールバーボタンを押しても、直前に選んだ週案の入力欄を見失わないようにする。
       document.addEventListener('focusin', function(event) {
         const el = event.target;
@@ -469,7 +468,8 @@
         const el=document.getElementById(id); if(el.options.length<6) el.add(new Option(p+'時間目',p));
       });
       document.getElementById('toolSourceEnd').value='6';
-      draftTimer=setInterval(saveDraftIfNeeded,30000);
+      draftTimer=setInterval(function(){saveDraftIfNeeded(true);},15000);
+      setInterval(function(){saveDraftIfNeeded(false);},180000);
 
       window.onbeforeprint = triggerAllFontAdjustments;
       window.onafterprint = triggerAllFontAdjustments;
@@ -482,12 +482,13 @@
       });
     };
 
-    function loadWeeklyData(weekNum) {
+    function loadWeeklyData(weekNum, prepared) {
       currentLoadedWeek = parseInt(weekNum, 10);
       document.getElementById('loading').style.display = 'block';
       document.getElementById('contentArea').style.display = 'none';
 
-      google.script.run.withSuccessHandler(function(data) {
+      const renderLoadedWeek = function(payload) {
+        const data = payload.weekly || payload;
         if(data.error) { alert(data.error); return; }
         document.getElementById('loading').style.display = 'none';
         
@@ -587,8 +588,12 @@
         }
         triggerAllFontAdjustments();
         setDirty(false); 
-        offerDraftRestore(currentLoadedWeek);
-      }).getWeeklyDataByNumber(weekNum);
+        offerDraftRestore(currentLoadedWeek, payload.draft);
+      };
+      if (prepared) renderLoadedWeek(prepared);
+      else google.script.run.withSuccessHandler(renderLoadedWeek).withFailureHandler(function(err){
+        document.getElementById('loading').innerText='読み込みに失敗しました: '+(err.message||err);
+      }).getWeeklyPageData(weekNum);
     }
 
     function collectWeeklyFormData() {
@@ -615,10 +620,12 @@
       const from=+document.getElementById('toolSourceStart').value, to=+document.getElementById('toolSourceEnd').value, dest=+document.getElementById('toolTargetStart').value;
       if(to<from || dest+(to-from)>6){alert('時間の範囲を確認してください。');return;}
       const overwrite=document.getElementById('toolOverwrite').checked;
-      google.script.run.withSuccessHandler(function(base){
+      const applyBase = function(base){
         for(let p=from;p<=to;p++){ const targetP=dest+(p-from), el=document.getElementById('p'+targetP+'-sub-'+target); if(el&&!el.disabled&&(overwrite||!el.value)){el.value=(base['p'+p]&&base['p'+p][source])||'';updateSubjectColor(el);} }
         setDirty(true); closeTimetableTool(); triggerAllFontAdjustments();
-      }).getDefaultTimetable();
+      };
+      if(productivitySettings.defaultTimetable) applyBase(productivitySettings.defaultTimetable);
+      else google.script.run.withSuccessHandler(applyBase).getDefaultTimetable();
     }
 
     function copyPreviousWeek(){
@@ -649,18 +656,24 @@
       return warnings.slice(0,15);
     }
 
-    function saveDraftIfNeeded(){
+    function draftStorageKey(week){ return 'shuan_weekly_draft_' + week; }
+    function saveDraftIfNeeded(localOnly){
       if(!isDirty||!document.getElementById('p1-sub-0'))return;
-      google.script.run.withSuccessHandler(function(r){if(r&&r.success)document.getElementById('draftStatus').innerText='下書き保存 '+r.savedAt;}).saveWeeklyDraft(currentLoadedWeek,collectWeeklyFormData());
+      const payload={savedAt:new Date().toISOString(),data:collectWeeklyFormData()};
+      try{localStorage.setItem(draftStorageKey(currentLoadedWeek),JSON.stringify(payload));document.getElementById('draftStatus').innerText='端末保存 '+new Date().toLocaleTimeString();}catch(e){}
+      if(!localOnly) google.script.run.withSuccessHandler(function(r){if(r&&r.success)document.getElementById('draftStatus').innerText='下書き同期 '+r.savedAt;}).saveWeeklyDraft(currentLoadedWeek,payload.data);
     }
-    function offerDraftRestore(week){
-      google.script.run.withSuccessHandler(function(draft){ if(draft&&draft.data&&confirm('この週には '+new Date(draft.savedAt).toLocaleString()+' の下書きがあります。復元しますか？')) fillWeeklyForm(draft.data); }).getWeeklyDraft(week);
+    function offerDraftRestore(week, serverDraft){
+      let localDraft=null;try{localDraft=JSON.parse(localStorage.getItem(draftStorageKey(week))||'null');}catch(e){}
+      const drafts=[localDraft,serverDraft].filter(d=>d&&d.data).sort((a,b)=>new Date(b.savedAt)-new Date(a.savedAt));
+      const draft=drafts[0];
+      if(draft&&confirm('この週には '+new Date(draft.savedAt).toLocaleString()+' の下書きがあります。復元しますか？')) fillWeeklyForm(draft.data);
     }
 
     function applyDefaultTimetable() {
       if(!confirm("基本時間割を上書きします。よろしいですか？")) return;
       document.getElementById('loading').style.display = 'block';
-      google.script.run.withSuccessHandler(function(defaultTimetable) {
+      const applyDefault = function(defaultTimetable) {
         document.getElementById('loading').style.display = 'none';
         const periods = ["p1", "p2", "p3", "p4", "p5", "p6"];
         periods.forEach(p => {
@@ -672,7 +685,9 @@
         triggerAllFontAdjustments();
         setDirty(true); 
         alert("基本時間割を展開しました。保存ボタンを押して確定してください。");
-      }).getDefaultTimetable();
+      };
+      if(productivitySettings.defaultTimetable) applyDefault(productivitySettings.defaultTimetable);
+      else google.script.run.withSuccessHandler(applyDefault).getDefaultTimetable();
     }
 
     function saveToSpreadsheet() {
@@ -705,7 +720,7 @@
           alert("保存しました！");
           setDirty(false);
           document.getElementById('draftStatus').innerText='保存済み';
-          google.script.run.withSuccessHandler(function(){loadWeeklyData(currentLoadedWeek);}).deleteWeeklyDraft(currentLoadedWeek);
+          try{localStorage.removeItem(draftStorageKey(currentLoadedWeek));}catch(e){}
         })
         .withFailureHandler(function(err) {
           document.getElementById('loading').style.display = 'none';
