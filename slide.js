@@ -73,16 +73,20 @@ function executeSlideGeneration(mode) {
   const targetDate = new Date(dates[homeworkCol - 1]);
   const dateStringTitle = Utilities.formatDate(targetDate, "JST", "M月d日") + "（" + getDayOfWeek(targetDate) + "）";
 
+  const firstDataCol = Math.min(homeworkCol, scheduleCol);
+  const block = sheet.getRange(13, firstDataCol, 19, Math.abs(scheduleCol - homeworkCol) + 1).getValues();
+  const scheduleOffset = scheduleCol - firstDataCol;
+  const homeworkOffset = homeworkCol - firstDataCol;
   const scheduleData = {
     date: dateStringTitle,
-    p1: sheet.getRange(13, scheduleCol).getValue(),
-    p2: sheet.getRange(15, scheduleCol).getValue(),
-    p3: sheet.getRange(18, scheduleCol).getValue(),
-    p4: sheet.getRange(20, scheduleCol).getValue(),
-    p5: sheet.getRange(25, scheduleCol).getValue(),
-    p6: sheet.getRange(27, scheduleCol).getValue(),
-    homework: sheet.getRange(30, homeworkCol).getValue(),
-    bikou: sheet.getRange(31, scheduleCol).getValue() || ""
+    p1: block[0][scheduleOffset],
+    p2: block[2][scheduleOffset],
+    p3: block[5][scheduleOffset],
+    p4: block[7][scheduleOffset],
+    p5: block[12][scheduleOffset],
+    p6: block[14][scheduleOffset],
+    homework: block[17][homeworkOffset],
+    bikou: block[18][scheduleOffset] || ""
   };
 
   try {
