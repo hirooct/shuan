@@ -38,23 +38,16 @@ function getCurrentWeekNum() {
 }
 // 今日の日付から「第何週目か」を自動計算して返す関数
 function getActualCurrentWeekNum() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const configSheet = ss.getSheetByName("設定");
-  if (!configSheet) return "1";
-
-  const oValues = configSheet.getRange("O9:O60").getValues().map(r => r[0]); // 週番号(1〜52)
-  const pValues = configSheet.getRange("P9:P60").getValues().map(r => r[0]); // 各週の月曜日の日付
-  
+  const weeks = getWeekConfigData_();
   const today = new Date();
   today.setHours(0,0,0,0); // 時間のズレをリセット
   
   let currentWeek = "1";
   
   // 設定シートの各週の期間と今日の日付を比較
-  for (let i = 0; i < pValues.length; i++) {
-    if (!pValues[i]) continue;
-    
-    const startMonday = new Date(pValues[i]);
+  for (let i = 0; i < weeks.length; i++) {
+    if (!weeks[i].startDate) continue;
+    const startMonday = new Date(weeks[i].startDate);
     startMonday.setHours(0,0,0,0);
     
     // その週の日曜日を計算
@@ -64,14 +57,32 @@ function getActualCurrentWeekNum() {
     
     // 今日が「月曜〜日曜」の間に挟まっていれば、その週番号を返す
     if (today >= startMonday && today <= endSunday) {
-      currentWeek = String(oValues[i]);
+      currentWeek = String(weeks[i].weekNum);
       break;
     }
   }
   return currentWeek;
 }
+
+function getWeekConfigData_() {
+  const cache = CacheService.getDocumentCache();
+  const key = 'WEEK_CONFIG_V1';
+  const hit = cache.get(key);
+  if (hit) {
+    try { return JSON.parse(hit); } catch (e) {}
+  }
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('設定');
+  if (!sheet) return [];
+  const result = sheet.getRange('O9:P60').getValues().map(function(row) {
+    return { weekNum: Number(row[0]), startDate: row[1] instanceof Date && !isNaN(row[1].getTime()) ? row[1].toISOString() : '' };
+  }).filter(function(item) { return item.weekNum && item.startDate; });
+  cache.put(key, JSON.stringify(result), 600);
+  return result;
+}
 // 設定シートから基本時間割（U2:Z8）を取得する関数
 function getDefaultTimetable() {
+  const cached = getWeeklyStaticSettings_();
+  if (cached && cached.defaultTimetable) return cached.defaultTimetable;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName("設定");
   if (!configSheet) return { error: "設定シートが見つかりません。" };
@@ -97,6 +108,67 @@ function getDefaultTimetable() {
   return defaultTimetable;
 }
 
+/** 変更頻度の低い週案設定を短時間キャッシュする。 */
+function getWeeklyStaticSettings_() {
+  const cache = CacheService.getDocumentCache();
+  const key = 'WEEKLY_STATIC_V1';
+  const hit = cache.get(key);
+  if (hit) {
+    try { return JSON.parse(hit); } catch (e) {}
+  }
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('設定');
+  if (!sheet) return null;
+  const values = sheet.getRange('L3:AB22').getValues();
+  const subjects = values.slice(5, 20).map(r => String(r[0] || '').trim())
+    .filter(v => v && v !== '教科');
+  const leavingTimes = values.slice(5, 20).map(r => {
+    const value = r[1];
+    return value instanceof Date
+      ? value.getHours() + ':' + String(value.getMinutes()).padStart(2, '0')
+      : String(value || '').trim();
+  }).filter(v => v && v !== '下校時間');
+  const colorSubjects = values.slice(0, 10).map(r => String(r[16] || '').trim())
+    .filter(v => v && !v.includes('色を変える教科'));
+  const source = sheet.getRange('U2:Z8').getValues();
+  const defaultTimetable = { p1: [], p2: [], p3: [], p4: [], p5: [], p6: [] };
+  for (let p = 1; p <= 6; p++) {
+    for (let d = 0; d < 7; d++) {
+      defaultTimetable['p' + p].push(d < 5 ? String(source[p][d + 1] || '') : '');
+    }
+  }
+  const result = { subjects, leavingTimes, colorSubjects, defaultTimetable };
+  cache.put(key, JSON.stringify(result), 600);
+  return result;
+}
+
+function clearShuanCaches_() {
+  const cache = CacheService.getDocumentCache();
+  cache.remove('WEEKLY_STATIC_V1');
+  cache.remove('WEEKLY_DATE_MAP_V1');
+  cache.remove('WEEK_CONFIG_V1');
+  cache.remove('SETTINGS_DATA_V1');
+}
+
+/** 年間の日付行だけを読み、日付から列番号を引けるようキャッシュする。 */
+function getWeeklyDateColumnMap_(sheet) {
+  const cache = CacheService.getDocumentCache();
+  const key = 'WEEKLY_DATE_MAP_V1';
+  const hit = cache.get(key);
+  if (hit) {
+    try { return JSON.parse(hit); } catch (e) {}
+  }
+  const lastCol = sheet.getLastColumn();
+  const dates = lastCol >= 2 ? sheet.getRange(10, 2, 1, lastCol - 1).getValues()[0] : [];
+  const map = {};
+  dates.forEach((value, i) => {
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      map[Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd')] = i + 2;
+    }
+  });
+  cache.put(key, JSON.stringify(map), 600);
+  return map;
+}
+
 // データを読み込むメイン関数
 function getWeeklyDataByNumber(targetWeekNum) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -105,13 +177,9 @@ function getWeeklyDataByNumber(targetWeekNum) {
   
   if (!mainSheet || !configSheet) return { error: "シート名を確認してください。" };
 
-  const oValues = configSheet.getRange("O9:O60").getValues().map(r => r[0]);
-  const pValues = configSheet.getRange("P9:P60").getValues().map(r => r[0]);
-  let targetIndex = oValues.indexOf(Number(targetWeekNum));
-  if (targetIndex === -1) targetIndex = oValues.indexOf(String(targetWeekNum));
-  if (targetIndex === -1) return { error: "指定された週が見つかりません。" };
-  
-  const startMonday = new Date(pValues[targetIndex]);
+  const targetWeek = getWeekConfigData_().find(item => Number(item.weekNum) === Number(targetWeekNum));
+  if (!targetWeek) return { error: "指定された週が見つかりません。" };
+  const startMonday = new Date(targetWeek.startDate);
   const weekDates = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(startMonday);
@@ -120,79 +188,33 @@ function getWeeklyDataByNumber(targetWeekNum) {
   }
   const dayLabels = ["月", "火", "水", "木", "金", "土", "日"];
 
-  const lastCol = mainSheet.getLastColumn();
-  const mainData = mainSheet.getRange(1, 1, 35, lastCol).getValues();
-  const colIndices = [];
-  weekDates.forEach((targetDate) => {
-    let foundIndex = -1;
-    for (let col = 1; col < lastCol; col++) {
-      const cellVal = mainData[9][col];
-      if (cellVal instanceof Date &&
-          cellVal.getFullYear() === targetDate.getFullYear() &&
-          cellVal.getMonth() === targetDate.getMonth() &&
-          cellVal.getDate() === targetDate.getDate()) {
-        foundIndex = col; break;
-      }
-    }
-    colIndices.push(foundIndex);
-  });
-
-  const lastRow = configSheet.getLastRow();
-
-  // L列の8行目以降から「プルダウン用」の教科リストを取得
-  let allSubjects = [];
-  if (lastRow >= 8) {
-    allSubjects = configSheet.getRange(8, 12, lastRow - 7, 1)
-      .getValues()
-      .map(r => String(r[0]).trim())
-      .filter(val => val !== "" && val !== "undefined" && val !== "教科");
-  }
-
-  // AB列の3行目以降から「色を変える対象」の教科リストを取得
-  let colorSubjects = [];
-  if (lastRow >= 3) {
-    colorSubjects = configSheet.getRange(3, 28, lastRow - 2, 1)
-      .getValues()
-      .map(r => String(r[0]).trim())
-      .filter(val => val !== "" && val !== "undefined" && !val.includes("色を変える教科"));
-  }
-
-  // M列の8行目以降から下校時間リストを取得
-  let leavingTimes = [];
-  if (lastRow >= 8) {
-    leavingTimes = configSheet.getRange(8, 13, lastRow - 7, 1)
-      .getValues()
-      .map(r => {
-        const val = r[0];
-        if (val instanceof Date) {
-          return val.getHours() + ":" + String(val.getMinutes()).padStart(2, '0');
-        }
-        return String(val).trim();
-      })
-      .filter(val => val !== "" && val !== "undefined" && val !== "下校時間");
-  }
+  const dateMap = getWeeklyDateColumnMap_(mainSheet);
+  const sheetColumns = weekDates.map(date => dateMap[Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd')] || -1);
+  if (sheetColumns.some(col => col < 1)) return { error: '対象週の日付列が見つかりません。' };
+  const firstColumn = sheetColumns[0];
+  if (!sheetColumns.every((col, i) => col === firstColumn + i)) return { error: '対象週の日付列が連続していません。' };
+  const mainData = mainSheet.getRange(1, firstColumn, 35, 7).getValues();
+  const colIndices = sheetColumns.map(col => col - 1); // クライアント互換の0始まり
+  const staticSettings = getWeeklyStaticSettings_() || { subjects: [], colorSubjects: [], leavingTimes: [] };
 
   const getSplitRowCells = (rowNum1, rowNum2) => {
-    return colIndices.map(col => {
-      if (col === -1) return { subject: "", content: "" };
+    return sheetColumns.map((col, localCol) => {
       return {
-        subject: String(mainData[rowNum1-1][col] || "").trim(),
-        content: String(mainData[rowNum2-1][col] || "").trim()
+        subject: String(mainData[rowNum1-1][localCol] || "").trim(),
+        content: String(mainData[rowNum2-1][localCol] || "").trim()
       };
     });
   };
 
   const getRowCells = (rowNum) => {
-    return colIndices.map(col => {
-      if (col === -1) return "";
-      return String(mainData[rowNum-1][col] || "");
+    return sheetColumns.map((col, localCol) => {
+      return String(mainData[rowNum-1][localCol] || "");
     });
   };
 
   const getLeavingRowCells = (rowNum) => {
-    return colIndices.map(col => {
-      if (col === -1) return "";
-      const val = mainData[rowNum-1][col];
+    return sheetColumns.map((col, localCol) => {
+      const val = mainData[rowNum-1][localCol];
       if (val instanceof Date) {
         return val.getHours() + ":" + String(val.getMinutes()).padStart(2, '0');
       }
@@ -202,7 +224,7 @@ function getWeeklyDataByNumber(targetWeekNum) {
 
   const appSettings = getAppDisplaySettings_();
   return {
-    year: String(mainData[1][0]).replace(/年度/g, ""),
+    year: String(mainSheet.getRange('A2').getValue()).replace(/年度/g, ""),
     schoolName: appSettings.schoolName,
     className: appSettings.className,
     teacherName: appSettings.teacherName,
@@ -211,9 +233,9 @@ function getWeeklyDataByNumber(targetWeekNum) {
     weekNum: targetWeekNum,
     days: weekDates.map((d, idx) => `${d.getMonth() + 1}/${d.getDate()}(${dayLabels[idx]})`),
     holidayRow: getRowCells(7),
-    dropdownSubjects: allSubjects,
-    colorSubjects: colorSubjects,
-    leavingTimes: leavingTimes,
+    dropdownSubjects: staticSettings.subjects,
+    colorSubjects: staticSettings.colorSubjects,
+    leavingTimes: staticSettings.leavingTimes,
     colIndices: colIndices,
     
     timetable: {
@@ -241,42 +263,48 @@ function saveWeeklyData(weekNum, colIndices, clientData) {
   const mainSheet = ss.getSheetByName("週案") || ss.getSheets()[0];
   if (!mainSheet) return { error: "シートが見つかりません。" };
 
-  const saveSingleRow = (rowNum, rowDataArray) => {
-    colIndices.forEach((colIdx, i) => {
-      if (colIdx !== -1) mainSheet.getRange(rowNum, colIdx + 1).setValue(rowDataArray[i]);
-    });
-  };
-
-  const saveSplitRow = (rowNum1, rowNum2, rowDataArray) => {
-    colIndices.forEach((colIdx, i) => {
-      if (colIdx !== -1) {
-        mainSheet.getRange(rowNum1, colIdx + 1).setValue(rowDataArray[i].subject);
-        mainSheet.getRange(rowNum2, colIdx + 1).setValue(rowDataArray[i].content);
-      }
-    });
-  };
-
+  const lock = LockService.getDocumentLock();
   try {
-    // 【重要】11行目（行事行）は数式を保護するため、保存処理を完全にスキップします。
-    saveSingleRow(12, clientData.morning);
-    saveSplitRow(13, 14, clientData.p1);
-    saveSplitRow(15, 16, clientData.p2);
-    saveSingleRow(17, clientData.rest);
-    saveSplitRow(18, 19, clientData.p3);
-    saveSplitRow(20, 21, clientData.p4);
-    saveSingleRow(22, clientData.lunch);
-    saveSingleRow(23, clientData.clean);
-    saveSingleRow(24, clientData.recess);
-    saveSplitRow(25, 26, clientData.p5);
-    saveSplitRow(27, 28, clientData.p6);
-    saveSingleRow(29, clientData.leaving);
-    saveSingleRow(30, clientData.homework);
-    saveSingleRow(31, clientData.memo);
-
+    lock.waitLock(10000);
+    const columns = (colIndices || []).map(Number);
+    if (columns.length !== 7 || columns.some((col, i) => !Number.isInteger(col) || col < 0 || (i && col !== columns[0] + i))) {
+      return { error: '保存対象の列情報が正しくありません。' };
+    }
+    const rowKeys = [
+      ['single','morning'], ['subject','p1'], ['content','p1'], ['subject','p2'], ['content','p2'],
+      ['single','rest'], ['subject','p3'], ['content','p3'], ['subject','p4'], ['content','p4'],
+      ['single','lunch'], ['single','clean'], ['single','recess'], ['subject','p5'], ['content','p5'],
+      ['subject','p6'], ['content','p6'], ['single','leaving'], ['single','homework'], ['single','memo']
+    ];
+    const values = rowKeys.map(([kind, key]) => Array.from({ length: 7 }, (_, i) => {
+      if (kind === 'single') return (clientData[key] || [])[i] || '';
+      const cell = (clientData[key] || [])[i] || {};
+      return cell[kind] || '';
+    }));
+    mainSheet.getRange(12, columns[0] + 1, 20, 7).setValues(values);
+    PropertiesService.getUserProperties().deleteProperty('WEEKLY_DRAFT_' + String(weekNum));
     return { success: true };
   } catch(e) {
     return { error: e.toString() };
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
   }
+}
+
+function getWeeklyPageInitialData() {
+  const weekNum = Number(getActualCurrentWeekNum());
+  return {
+    weekNum: weekNum,
+    weekly: getWeeklyDataByNumber(weekNum),
+    slideUrl: getSlideUrl(),
+    productivity: getProductivitySettings(),
+    defaultTimetable: getDefaultTimetable(),
+    draft: getWeeklyDraft(weekNum)
+  };
+}
+
+function getWeeklyPageData(weekNum) {
+  return { weekly: getWeeklyDataByNumber(weekNum), draft: getWeeklyDraft(weekNum) };
 }
 
 // Webアプリから行事・休日を設定シートの最後に追加する関数
