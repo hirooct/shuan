@@ -1,8 +1,8 @@
 /**
  * 配付・初期設定・保守機能
  */
-var SHUAN_APP_VERSION = '3.0.0';
-var SHUAN_APP_UPDATED_AT = '2026-09-09';
+var SHUAN_APP_VERSION = '3.1.0';
+var SHUAN_APP_UPDATED_AT = '2026-09-11';
 var SHUAN_RESET_CONFIRM_TEXT = '初期化する';
 
 function getAppVersionInfo() {
@@ -277,6 +277,7 @@ function initializeForDistribution(confirmText) {
       SHUAN_PRODUCTIVITY_KEYS.PATTERNS, SHUAN_PRODUCTIVITY_KEYS.PHRASES,
       SHUAN_PRODUCTIVITY_KEYS.TSUSHIN, SHUAN_PRODUCTIVITY_KEYS.WIZARD
     ].forEach(function(key) { documentProps.deleteProperty(key); });
+    clearShuanCaches_();
     SpreadsheetApp.flush();
 
     return {
