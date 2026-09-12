@@ -1,108 +1,41 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <style>
-      /* GASのiFrame環境でも確実に中央配置にするための修正 */
-      html, body {
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        background: #f0f4f8;
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script>
+    (function(){
+      const isIPad = /iPad/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIPad) {
+        location.replace('<?= getScriptUrl(); ?>?p=ipad');
       }
-      
-      body {
-        font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-
-      /* メニューカードのデザイン調整 */
-      .menu-card {
-        background: white;
-        padding: 40px 30px;
-        border-radius: 16px;
-        box-shadow: 0 10px 30px rgba(51, 65, 85, 0.08);
-        text-align: center;
-        width: 340px;
-        box-sizing: border-box;
-      }
-
-      h1 {
-        color: #1e293b;
-        font-size: 22px;
-        font-weight: 700;
-        margin-top: 0;
-        margin-bottom: 28px;
-        letter-spacing: 0.05em;
-      }
-
-      /* ボタンの共通スタイル（余白やサイズを美しく統一） */
-      .btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 54px;
-        margin-bottom: 16px;
-        text-decoration: none;
-        color: white;
-        border-radius: 10px;
-        font-weight: bold;
-        font-size: 15px;
-        box-sizing: border-box;
-        transition: background-color 0.2s, transform 0.1s, box-shadow 0.2s;
-      }
-
-      /* 最後のボタンだけ下のマージンを無くして余白を均等に */
-      .btn:last-child {
-        margin-bottom: 0;
-      }
-
-      .btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      }
-
-      .btn:active {
-        transform: translateY(0);
-      }
-
-      /* 各ボタンのカラー調整（少し目に優しいモダンな色合いに変更） */
-      .btn-shuan {
-        background-color: #2563eb;
-      }
-      .btn-shuan:hover {
-        background-color: #1d4ed8;
-      }
-
-      .btn-tsushin {
-        background-color: #0d9488;
-      }
-      .btn-tsushin:hover {
-        background-color: #0f766e;
-      }
-
-      .btn-setting {
-        background-color: #475569;
-      }
-      .btn-setting:hover {
-        background-color: #334155;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="menu-card">
-      <h1><?= appName ?></h1>
-      <? if (schoolName || className || teacherName) { ?>
-        <p style="margin:-16px 0 24px;color:#64748b;font-size:13px;">
-          <?= [schoolName, className, teacherName].filter(Boolean).join('　') ?>
-        </p>
-      <? } ?>
-      <a href="<?= getScriptUrl(); ?>?p=WeeklyPrint" class="btn btn-shuan">📅 週案ページ</a>
-      <a href="<?= getScriptUrl(); ?>?p=tsushin" class="btn btn-tsushin">✉️ 学級通信ページ</a>
-      <a href="<?= getScriptUrl(); ?>?p=setting" class="btn btn-setting">⚙️ 設定ページ</a>
-    </div>
-  </body>
+    })();
+  </script>
+  <style>
+    html,body{height:100%;margin:0;padding:0;background:#f0f4f8}
+    body{font-family:'Helvetica Neue',Arial,'Hiragino Kaku Gothic ProN',sans-serif;display:flex;justify-content:center;align-items:center;padding:20px;box-sizing:border-box}
+    .menu-card{background:white;padding:40px 30px;border-radius:16px;box-shadow:0 10px 30px rgba(51,65,85,.08);text-align:center;width:340px;box-sizing:border-box}
+    h1{color:#1e293b;font-size:22px;font-weight:700;margin:0 0 28px;letter-spacing:.05em}
+    .meta{margin:-16px 0 24px;color:#64748b;font-size:13px}
+    .btn{display:flex;align-items:center;justify-content:center;width:100%;height:54px;margin-bottom:16px;text-decoration:none;color:white;border-radius:10px;font-weight:bold;font-size:15px;box-sizing:border-box;transition:.2s}
+    .btn:last-child{margin-bottom:0}.btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+    .btn-shuan{background:#2563eb}.btn-tsushin{background:#0d9488}.btn-setting{background:#475569}.btn-ipad{background:#7c3aed}
+    .ipad-note{margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;color:#64748b;font-size:12px;line-height:1.6}
+  </style>
+</head>
+<body>
+  <div class="menu-card">
+    <h1><?= appName ?></h1>
+    <? if (schoolName || className || teacherName) { ?>
+      <p class="meta"><?= [schoolName, className, teacherName].filter(Boolean).join('　') ?></p>
+    <? } ?>
+    <a href="<?= getScriptUrl(); ?>?p=WeeklyPrint" class="btn btn-shuan">📅 週案ページ</a>
+    <a href="<?= getScriptUrl(); ?>?p=tsushin" class="btn btn-tsushin">✉️ 学級通信ページ</a>
+    <a href="<?= getScriptUrl(); ?>?p=setting" class="btn btn-setting">⚙️ 設定ページ</a>
+    <a href="<?= getScriptUrl(); ?>?p=ipad" class="btn btn-ipad">📱 iPad版を開く</a>
+    <div class="ipad-note">iPadからアクセスした場合は、自動でiPad専用画面を開きます。</div>
+  </div>
+</body>
 </html>

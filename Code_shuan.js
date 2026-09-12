@@ -3,7 +3,7 @@
  */
 
 function doGet(e) {
-  const allowedPages = ['index', 'WeeklyPrint', 'tsushin', 'setting'];
+  const allowedPages = ['index', 'WeeklyPrint', 'tsushin', 'setting', 'ipad'];
   const requestedPage = e && e.parameter ? e.parameter.p : '';
   const page = allowedPages.includes(requestedPage) ? requestedPage : 'index';
 
