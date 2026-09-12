@@ -39,6 +39,9 @@
   .btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
   .saveBtn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; background: #2e7d32; color: white; transition: background 0.2s; font-family: inherit; }
   .saveBtn:hover { filter: brightness(0.85); }
+  .secondaryBtn { width: 100%; padding: 11px; border: 1px solid #64748b; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; background: #fff; color: #334155; font-family: inherit; }
+  .secondaryBtn:hover { background: #f1f5f9; }
+  .photoRemoveBtn { margin-top: 6px; padding: 7px 10px; border: 1px solid #b91c1c; border-radius: 8px; background: #fff; color: #b91c1c; cursor: pointer; font-weight: bold; }
   .printBtn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: bold; font-size: 15px; cursor: pointer; background: var(--theme-color, #1f4d8f); color: white; transition: background 0.2s; font-family: inherit; }
   .printBtn:hover { filter: brightness(0.85); }
   
@@ -129,6 +132,15 @@
   .qr-container.qr-all-hide { display: none !important; } 
 
   .hidden-input { display: none !important; }
+  .archiveModal { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(15,23,42,.55); align-items: center; justify-content: center; padding: 20px; font-family: "Helvetica Neue", Arial, "Meiryo", sans-serif; }
+  .archiveModal.open { display: flex; }
+  .archiveDialog { width: min(720px, 96vw); max-height: 82vh; overflow: auto; background: #fff; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.3); padding: 20px; }
+  .archiveHeader { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .archiveHeader h2 { margin: 0; font-size: 19px; color: #1e3a8a; }
+  .archiveClose { border: 0; background: #e2e8f0; border-radius: 999px; width: 34px; height: 34px; cursor: pointer; font-size: 18px; }
+  .archiveItem { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #dbe4ef; border-radius: 10px; margin-bottom: 8px; }
+  .archiveMeta { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .archiveLoadBtn { border: 0; border-radius: 8px; padding: 9px 13px; background: #1e3a8a; color: #fff; cursor: pointer; font-weight: bold; }
 
   @media print {
     body { background: white; }
@@ -164,6 +176,7 @@
       <label style="color: #1e3a8a; font-size: 14px;">▼ 今週のひとこま設定</label>
       <label for="photoInput">写真を入れる</label>
       <input type="file" id="photoInput" accept="image/*">
+      <button type="button" class="photoRemoveBtn" onclick="removeMainPhoto()">写真を外す</button>
       <label for="photoCaptionInput">写真の説明（キャプション）</label>
       <input id="photoCaptionInput" value="" placeholder="例：マット運動の様子（5/25）">
       <label>写真の調整</label>
@@ -206,6 +219,7 @@
           <div id="upperPhotoSettings" class="sub-panel-box hidden-input">
             <label for="upperPhotoInput">トピックス写真</label>
             <input type="file" id="upperPhotoInput" accept="image/*">
+            <button type="button" class="photoRemoveBtn" onclick="removeUpperPhoto()">写真を外す</button>
             <label for="upperPhotoCaptionInput">キャプション</label>
             <input id="upperPhotoCaptionInput" value="" placeholder="例：理科の実験（6/1）">
             <label>トピックス写真の調整</label>
@@ -281,6 +295,7 @@
 
     <div class="btn-group">
       <button class="saveBtn" onclick="saveToSpreadsheet()">スプレッドシートに一時保存</button>
+      <button class="secondaryBtn" onclick="openArchiveModal()">過去の保存を見る</button>
       <button class="printBtn" onclick="window.print()">印刷・保存</button>
     </div>
   </aside>
@@ -342,9 +357,26 @@
   </main>
 </div>
 
+<div id="archiveModal" class="archiveModal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle" onclick="if(event.target===this) closeArchiveModal()">
+  <div class="archiveDialog">
+    <div class="archiveHeader">
+      <h2 id="archiveTitle">学級通信の過去の保存</h2>
+      <button class="archiveClose" onclick="closeArchiveModal()" aria-label="閉じる">×</button>
+    </div>
+    <div id="archiveList">読み込み中...</div>
+  </div>
+</div>
+
 <script>
 let nextWeekData = null;
 let followingWeekData = null;
+let loadedPhotoData = null;
+let loadedUpperPhotoData = null;
+let photoChanged = false;
+let upperPhotoChanged = false;
+let photoRemoved = false;
+let upperPhotoRemoved = false;
+let photoProcessing = 0;
 
 function toggleUpperInputs() {
   const isTable = document.getElementById("upperTypeSelect").value === "table";
@@ -368,19 +400,23 @@ function toggleUpperPhotoSettings() {
 // フォームデータ取得ロジックの拡張（追加項目：upperHasPhoto, upperPhotoCaption, showLunchDuty）
 function getFormData() {
   return {
+    mainTitle: document.getElementById("mainTitleInput").value,
     issue: document.getElementById("issueInput").value,
     issueDate: document.getElementById("dateInput").value, 
+    className: document.getElementById("classInput").value,
     columnTitle: document.getElementById("columnTitle").value,
     columnBody: document.getElementById("columnBody").value,
     notice: document.getElementById("noticeInput").value,
     qrRentaku: document.getElementById("qrRentakuUrl").value,
     qrHomework: document.getElementById("qrHomeworkUrl").value,
     upperType: document.getElementById("upperTypeSelect").value,
+    upperTitle: document.getElementById("upperTitleInput").value,
     upperColTitle: document.getElementById("upperColTitleInput").value,
     upperColBody: document.getElementById("upperColBodyInput").value,
     upperHasPhoto: document.getElementById("upperHasPhotoInput").checked,
     upperPhotoCaption: document.getElementById("upperPhotoCaptionInput").value,
     lowerType: document.getElementById("lowerTypeSelect").value,
+    lowerTitle: document.getElementById("lowerTitleInput").value,
     lowerColTitle: document.getElementById("lowerColTitleInput").value,
     lowerColBody: document.getElementById("lowerColBodyInput").value,
     photoCaption: document.getElementById("photoCaptionInput").value,
@@ -390,16 +426,32 @@ function getFormData() {
     qrRenrakuShow: document.getElementById("qrRenrakuShowInput").checked,
     qrHomeworkLabel: document.getElementById("qrHomeworkLabelInput").value,
     qrHomeworkShow: document.getElementById("qrHomeworkShowInput").checked,
-    showLunchDuty: document.getElementById("showLunchDutyInput").checked
+    showLunchDuty: document.getElementById("showLunchDutyInput").checked,
+    theme: document.getElementById("colorSelect").value,
+    photoTransform: {zoom:document.getElementById("zoomRange").value, x:document.getElementById("xPosRange").value, y:document.getElementById("yPosRange").value},
+    upperPhotoTransform: {zoom:document.getElementById("upperZoomRange").value, x:document.getElementById("upperXPosRange").value, y:document.getElementById("upperYPosRange").value},
+    photoData: photoChanged ? loadedPhotoData : '',
+    upperPhotoData: upperPhotoChanged ? loadedUpperPhotoData : '',
+    removePhoto: photoRemoved,
+    removeUpperPhoto: upperPhotoRemoved
   };
 }
 
 function saveToSpreadsheet() {
+  if (photoProcessing > 0) {
+    alert('写真を準備しています。数秒待ってから、もう一度保存してください。');
+    return;
+  }
   const btn = document.querySelector(".saveBtn");
   btn.disabled = true; btn.textContent = "保存中...";
   if (typeof google !== 'undefined' && google.script && google.script.run) {
-    google.script.run.withSuccessHandler(msg => {
-      alert(msg); btn.disabled = false; btn.textContent = "スプレッドシートに一時保存";
+    google.script.run.withSuccessHandler(result => {
+      photoChanged = false; upperPhotoChanged = false; photoRemoved = false; upperPhotoRemoved = false;
+      alert(result && result.message ? result.message : String(result));
+      btn.disabled = false; btn.textContent = "スプレッドシートに一時保存";
+    }).withFailureHandler(error => {
+      alert("保存できませんでした：" + (error && error.message ? error.message : error));
+      btn.disabled = false; btn.textContent = "スプレッドシートに一時保存";
     }).saveTsushinData(getFormData());
   } else {
     alert("ローカル環境のためシミュレーション保存しました");
@@ -407,43 +459,69 @@ function saveToSpreadsheet() {
   }
 }
 
+function setTsushinValue(data, key, id) {
+  if (Object.prototype.hasOwnProperty.call(data, key)) document.getElementById(id).value = data[key] == null ? '' : data[key];
+}
+
+function setTsushinChecked(data, key, id) {
+  if (Object.prototype.hasOwnProperty.call(data, key)) document.getElementById(id).checked = data[key] === true;
+}
+
+function applyTsushinForm(data) {
+  setTsushinValue(data,'mainTitle','mainTitleInput');
+  setTsushinValue(data,'issue','issueInput');
+  setTsushinValue(data,'issueDate','dateInput');
+  setTsushinValue(data,'className','classInput');
+  setTsushinValue(data,'columnTitle','columnTitle');
+  setTsushinValue(data,'columnBody','columnBody');
+  setTsushinValue(data,'notice','noticeInput');
+  setTsushinValue(data,'qrRentaku','qrRentakuUrl');
+  setTsushinValue(data,'qrHomework','qrHomeworkUrl');
+  setTsushinValue(data,'upperType','upperTypeSelect');
+  setTsushinValue(data,'upperTitle','upperTitleInput');
+  setTsushinValue(data,'upperColTitle','upperColTitleInput');
+  setTsushinValue(data,'upperColBody','upperColBodyInput');
+  setTsushinChecked(data,'upperHasPhoto','upperHasPhotoInput');
+  setTsushinValue(data,'upperPhotoCaption','upperPhotoCaptionInput');
+  setTsushinValue(data,'lowerType','lowerTypeSelect');
+  setTsushinValue(data,'lowerTitle','lowerTitleInput');
+  setTsushinValue(data,'lowerColTitle','lowerColTitleInput');
+  setTsushinValue(data,'lowerColBody','lowerColBodyInput');
+  setTsushinValue(data,'photoCaption','photoCaptionInput');
+  setTsushinValue(data,'upperWeek','upperWeekSelect');
+  setTsushinValue(data,'lowerWeek','lowerWeekSelect');
+  setTsushinValue(data,'qrRenrakuLabel','qrRenrakuLabelInput');
+  setTsushinChecked(data,'qrRenrakuShow','qrRenrakuShowInput');
+  setTsushinValue(data,'qrHomeworkLabel','qrHomeworkLabelInput');
+  setTsushinChecked(data,'qrHomeworkShow','qrHomeworkShowInput');
+  setTsushinChecked(data,'showLunchDuty','showLunchDutyInput');
+  setTsushinValue(data,'theme','colorSelect');
+  const pt = data.photoTransform || {};
+  const upt = data.upperPhotoTransform || {};
+  if (pt.zoom != null) document.getElementById('zoomRange').value = pt.zoom;
+  if (pt.x != null) document.getElementById('xPosRange').value = pt.x;
+  if (pt.y != null) document.getElementById('yPosRange').value = pt.y;
+  if (upt.zoom != null) document.getElementById('upperZoomRange').value = upt.zoom;
+  if (upt.x != null) document.getElementById('upperXPosRange').value = upt.x;
+  if (upt.y != null) document.getElementById('upperYPosRange').value = upt.y;
+  changeThemeColor();
+  toggleUpperInputs();
+  toggleLowerInputs();
+  toggleUpperPhotoSettings();
+}
+
 function loadFromSpreadsheet() {
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     google.script.run.withSuccessHandler(bundle => {
       const data = bundle.form || {};
-      if (data.issue) document.getElementById("issueInput").value = data.issue;
-      if (data.issueDate) document.getElementById("dateInput").value = data.issueDate; 
-      if (data.columnTitle) document.getElementById("columnTitle").value = data.columnTitle;
-      if (data.columnBody) document.getElementById("columnBody").value = data.columnBody;
-      if (data.notice) document.getElementById("noticeInput").value = data.notice;
-      if (data.qrRentaku) document.getElementById("qrRentakuUrl").value = data.qrRentaku;
-      if (data.qrHomework) document.getElementById("qrHomeworkUrl").value = data.qrHomework;
-      if (data.upperType) document.getElementById("upperTypeSelect").value = data.upperType;
-      if (data.upperColTitle) document.getElementById("upperColTitleInput").value = data.upperColTitle;
-      if (data.upperColBody) document.getElementById("upperColBodyInput").value = data.upperColBody;
-      if (data.upperHasPhoto !== undefined) document.getElementById("upperHasPhotoInput").checked = data.upperHasPhoto;
-      if (data.upperPhotoCaption) document.getElementById("upperPhotoCaptionInput").value = data.upperPhotoCaption;
-      if (data.lowerType) document.getElementById("lowerTypeSelect").value = data.lowerType;
-      if (data.lowerColTitle) document.getElementById("lowerColTitleInput").value = data.lowerColTitle;
-      if (data.lowerColBody) document.getElementById("lowerColBodyInput").value = data.lowerColBody;
-      if (data.photoCaption) document.getElementById("photoCaptionInput").value = data.photoCaption; 
-      if (data.upperWeek) document.getElementById("upperWeekSelect").value = data.upperWeek;
-      if (data.lowerWeek) document.getElementById("lowerWeekSelect").value = data.lowerWeek;
-      if (data.qrRenrakuLabel) document.getElementById("qrRenrakuLabelInput").value = data.qrRenrakuLabel;
-      if (data.qrRenrakuShow !== undefined) document.getElementById("qrRenrakuShowInput").checked = data.qrRenrakuShow;
-      if (data.qrHomeworkLabel) document.getElementById("qrHomeworkLabelInput").value = data.qrHomeworkLabel;
-      if (data.qrHomeworkShow !== undefined) document.getElementById("qrHomeworkShowInput").checked = data.qrHomeworkShow;
-      if (data.showLunchDuty !== undefined) document.getElementById("showLunchDutyInput").checked = data.showLunchDuty;
-
-      toggleUpperInputs();
-      toggleLowerInputs();
-      toggleUpperPhotoSettings();
+      applyTsushinForm(data);
       const upperWeek = Number(document.getElementById("upperWeekSelect").value);
       const lowerWeek = Number(document.getElementById("lowerWeekSelect").value);
       nextWeekData = (bundle.plans || {})[String(upperWeek)] || {};
       followingWeekData = (bundle.plans || {})[String(lowerWeek)] || {};
       render();
-    }).loadTsushinInitialData();
+      google.script.run.withSuccessHandler(photos => applyLoadedPhotos(photos, false)).loadTsushinPhotos();
+    }).withFailureHandler(error => alert("学級通信を読み込めませんでした：" + (error && error.message ? error.message : error))).loadTsushinInitialData();
   }
 }
 
@@ -585,9 +663,6 @@ function adjustEventFontSize() {
   });
 }
 
-// 画像のキャッシュ状態を保持するための変数
-let loadedUpperPhotoData = null;
-
 function render() {
   const now = new Date();
   const year = now.getFullYear();
@@ -709,34 +784,128 @@ function render() {
   setTimeout(adjustEventFontSize, 50);
 }
 
-// 写真入力イベント（今週のひとこま用）
-document.getElementById("photoInput").addEventListener("change", e => {
+function compressPhoto(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !String(file.type).startsWith('image/')) return reject(new Error('画像ファイルを選んでください。'));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('写真を読み込めませんでした。'));
+    reader.onload = event => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('この写真形式は読み込めません。'));
+      img.onload = () => {
+        const maxSide = 1400;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', .82));
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function showMainPhoto() {
+  const ps = document.getElementById('photoPreview');
+  ps.innerHTML = loadedPhotoData ? `<img src="${loadedPhotoData}">` : '<span class="photoHint">写真スペース</span>';
+  ps.classList.toggle('has-photo', Boolean(loadedPhotoData));
+  updatePhotoTransform();
+}
+
+function applyLoadedPhotos(photos, fromArchive) {
+  loadedPhotoData = photos && photos.photoData ? photos.photoData : null;
+  loadedUpperPhotoData = photos && photos.upperPhotoData ? photos.upperPhotoData : null;
+  photoChanged = Boolean(fromArchive && loadedPhotoData);
+  upperPhotoChanged = Boolean(fromArchive && loadedUpperPhotoData);
+  photoRemoved = Boolean(fromArchive && !loadedPhotoData);
+  upperPhotoRemoved = Boolean(fromArchive && !loadedUpperPhotoData);
+  showMainPhoto();
+  render();
+}
+
+function removeMainPhoto() {
+  loadedPhotoData = null; photoChanged = false; photoRemoved = true;
+  document.getElementById('photoInput').value = '';
+  showMainPhoto();
+}
+
+function removeUpperPhoto() {
+  loadedUpperPhotoData = null; upperPhotoChanged = false; upperPhotoRemoved = true;
+  document.getElementById('upperPhotoInput').value = '';
+  render();
+}
+
+document.getElementById("photoInput").addEventListener("change", async e => {
   const file = e.target.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = event => {
-    const ps = document.getElementById("photoPreview");
-    ps.innerHTML = `<img src="${event.target.result}">`;
-    ps.classList.add("has-photo");
-    updatePhotoTransform();
-  };
-  reader.readAsDataURL(file);
+  photoProcessing++;
+  try {
+    loadedPhotoData = await compressPhoto(file);
+    photoChanged = true; photoRemoved = false; showMainPhoto();
+  } catch (error) { alert(error.message || error); }
+  finally { photoProcessing--; }
 });
 
-// 写真入力イベント（上段トピックス用）
-document.getElementById("upperPhotoInput").addEventListener("change", e => {
+document.getElementById("upperPhotoInput").addEventListener("change", async e => {
   const file = e.target.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = event => {
-    loadedUpperPhotoData = event.target.result;
-    const ps = document.getElementById("upperPhotoPreview");
-    if (ps) {
-      ps.innerHTML = `<img src="${loadedUpperPhotoData}">`;
-      ps.classList.add("has-photo");
-      updateUpperPhotoTransform();
-    }
-  };
-  reader.readAsDataURL(file);
+  photoProcessing++;
+  try {
+    loadedUpperPhotoData = await compressPhoto(file);
+    upperPhotoChanged = true; upperPhotoRemoved = false; render();
+  } catch (error) { alert(error.message || error); }
+  finally { photoProcessing--; }
 });
+
+function openArchiveModal() {
+  document.getElementById('archiveModal').classList.add('open');
+  const list = document.getElementById('archiveList');
+  list.textContent = '読み込み中...';
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    list.textContent = '公開したウェブアプリで利用できます。'; return;
+  }
+  google.script.run.withSuccessHandler(renderArchiveList).withFailureHandler(error => {
+    list.textContent = '履歴を読み込めませんでした：' + (error && error.message ? error.message : error);
+  }).listTsushinArchives(50);
+}
+
+function closeArchiveModal() { document.getElementById('archiveModal').classList.remove('open'); }
+
+function escapeArchiveText(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function renderArchiveList(items) {
+  const list = document.getElementById('archiveList');
+  if (!items || !items.length) { list.textContent = 'まだ保存履歴はありません。学級通信を保存すると、ここへ自動追加されます。'; return; }
+  list.innerHTML = items.map(item => `<div class="archiveItem"><div><strong>${escapeArchiveText(item.issue || '号数未設定')}　${escapeArchiveText(item.title)}</strong><div class="archiveMeta">保存：${escapeArchiveText(item.savedAt)} ／ 発行日：${escapeArchiveText(item.issueDate)} ／ 第${escapeArchiveText(item.upperWeek)}週・第${escapeArchiveText(item.lowerWeek)}週</div></div><button class="archiveLoadBtn" onclick="loadArchiveItem('${escapeArchiveText(item.id)}')">表示</button></div>`).join('');
+}
+
+function loadArchiveItem(id) {
+  if (!confirm('現在の画面を、この保存時点の内容に置き換えますか？\n（保存ボタンを押すまではスプレッドシートへ反映されません）')) return;
+  const list = document.getElementById('archiveList');
+  list.textContent = '過去の学級通信を読み込み中...';
+  google.script.run.withSuccessHandler(bundle => {
+    applyTsushinForm(bundle.form || {});
+    applyLoadedPhotos(bundle.photos || {}, true);
+    const upperWeek = Number(document.getElementById('upperWeekSelect').value);
+    const lowerWeek = Number(document.getElementById('lowerWeekSelect').value);
+    if (bundle.plans) {
+      nextWeekData = bundle.plans[String(upperWeek)] || {};
+      followingWeekData = bundle.plans[String(lowerWeek)] || {};
+      render(); closeArchiveModal(); return;
+    }
+    google.script.run.withSuccessHandler(plans => {
+      nextWeekData = plans[String(upperWeek)] || {};
+      followingWeekData = plans[String(lowerWeek)] || {};
+      render(); closeArchiveModal();
+    }).getWeekPlans([upperWeek, lowerWeek]);
+  }).withFailureHandler(error => {
+    list.textContent = '保存履歴を表示できませんでした：' + (error && error.message ? error.message : error);
+  }).loadTsushinArchive(id);
+}
 
 // 各調整スライダーのイベント紐付け
 ["zoomRange", "xPosRange", "yPosRange"].forEach(id => document.getElementById(id).addEventListener("input", updatePhotoTransform));

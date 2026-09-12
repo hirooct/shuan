@@ -1,8 +1,8 @@
 /**
  * 配付・初期設定・保守機能
  */
-var SHUAN_APP_VERSION = '3.1.0';
-var SHUAN_APP_UPDATED_AT = '2026-09-11';
+var SHUAN_APP_VERSION = '3.2.0';
+var SHUAN_APP_UPDATED_AT = '2026-09-12';
 var SHUAN_RESET_CONFIRM_TEXT = '初期化する';
 
 function getAppVersionInfo() {
@@ -272,8 +272,17 @@ function initializeForDistribution(confirmText) {
     settings.getRange('AB3:AB12').clearContent();
 
     communication.getRange(1, 2, Math.max(communication.getLastRow(), 20), 1).clearContent();
+    const communicationArchive = ss.getSheetByName('学級通信アーカイブ');
+    if (communicationArchive && communicationArchive.getLastRow() > 1) {
+      communicationArchive.getRange(2, 1, communicationArchive.getLastRow() - 1, communicationArchive.getLastColumn()).clearContent();
+    }
     const documentProps = PropertiesService.getDocumentProperties();
+    const photoFolderId = documentProps.getProperty('TSUSHIN_PHOTO_FOLDER_ID');
+    if (photoFolderId) {
+      try { DriveApp.getFolderById(photoFolderId).setTrashed(true); } catch (e) { /* 既に削除済み */ }
+    }
     ['APP_NAME', 'SCHOOL_NAME', 'CLASS_NAME', 'TEACHER_NAME',
+      'TSUSHIN_PHOTO_FOLDER_ID',
       SHUAN_PRODUCTIVITY_KEYS.PATTERNS, SHUAN_PRODUCTIVITY_KEYS.PHRASES,
       SHUAN_PRODUCTIVITY_KEYS.TSUSHIN, SHUAN_PRODUCTIVITY_KEYS.WIZARD
     ].forEach(function(key) { documentProps.deleteProperty(key); });

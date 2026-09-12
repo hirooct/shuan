@@ -137,12 +137,21 @@ function loadTsushinData() {
   const sheet = ss.getSheetByName("通信データ");
   if (!sheet) return {};
   
-  const v = sheet.getRange('B1:B20').getValues().map(function(row) { return row[0]; });
-  return { issue:v[0], columnTitle:v[1], columnBody:v[2], notice:v[3], qrRentaku:v[4], qrHomework:v[5],
+  const v = sheet.getRange('B1:B33').getValues().map(function(row) { return row[0]; });
+  const result = { issue:v[0], columnTitle:v[1], columnBody:v[2], notice:v[3], qrRentaku:v[4], qrHomework:v[5],
     upperType:v[6]||'table', upperColTitle:v[7]||'上段コラム', upperColBody:v[8]||'', lowerType:v[9]||'table',
     lowerColTitle:v[10]||'下段コラム', lowerColBody:v[11]||'', photoCaption:v[12]||'', upperWeek:v[13]||'11',
     lowerWeek:v[14]||'12', qrRenrakuLabel:v[15]||'連絡帳', qrRenrakuShow:v[16]!==false,
     qrHomeworkLabel:v[17]||'宿題チェック', qrHomeworkShow:v[18]!==false, issueDate:v[19]||'' };
+  // v3.2より前のシートでは、未保存だった画面初期値を不用意に空欄へしない。
+  if (Number(v[32]) >= 2) {
+    Object.assign(result, {mainTitle:v[20]||'', className:v[21]||'', upperTitle:v[22]||'', lowerTitle:v[23]||'',
+      upperHasPhoto:v[24]===true, upperPhotoCaption:v[25]||'', showLunchDuty:v[26]!==false,
+      theme:v[27]||'#1f3a5f,#e8eef7', photoTransform:parseTsushinJson_(v[28], {zoom:'1',x:'0',y:'0'}),
+      upperPhotoTransform:parseTsushinJson_(v[29], {zoom:'1',x:'0',y:'0'}),
+      photoFileId:v[30]||'', upperPhotoFileId:v[31]||''});
+  }
+  return result;
 }
 
 function loadTsushinInitialData() {
@@ -152,21 +161,157 @@ function loadTsushinInitialData() {
   return { form: form, plans: getWeekPlans([upperWeek, lowerWeek]) };
 }
 
+/** 写真は初期画面と分けて遅延読込し、文字入力画面を先に表示する。 */
+function loadTsushinPhotos() {
+  const form = loadTsushinData();
+  return {
+    photoData: getTsushinPhotoData_(form.photoFileId),
+    upperPhotoData: getTsushinPhotoData_(form.upperPhotoFileId)
+  };
+}
+
 /**
  * アプリで入力されたすべての文章、レイアウト、対象週、QRコード表示設定を【通信データ】シートに保存する関数
  */
 function saveTsushinData(data) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("通信データ");
+    if (!sheet) throw new Error("『通信データ』シートが見つかりません。");
+
+    const current = loadTsushinData();
+    const photoFileId = updateTsushinPhoto_(data.photoData, current.photoFileId, data.removePhoto, data.issue, 'ひとこま');
+    const upperPhotoFileId = updateTsushinPhoto_(data.upperPhotoData, current.upperPhotoFileId, data.removeUpperPhoto, data.issue, 'トピックス');
+    const normalized = {
+      issue:data.issue||'', columnTitle:data.columnTitle||'', columnBody:data.columnBody||'', notice:data.notice||'',
+      qrRentaku:data.qrRentaku||'', qrHomework:data.qrHomework||'', upperType:data.upperType||'table',
+      upperColTitle:data.upperColTitle||'', upperColBody:data.upperColBody||'', lowerType:data.lowerType||'table',
+      lowerColTitle:data.lowerColTitle||'', lowerColBody:data.lowerColBody||'', photoCaption:data.photoCaption||'',
+      upperWeek:data.upperWeek||'', lowerWeek:data.lowerWeek||'', qrRenrakuLabel:data.qrRenrakuLabel||'',
+      qrRenrakuShow:data.qrRenrakuShow!==false, qrHomeworkLabel:data.qrHomeworkLabel||'',
+      qrHomeworkShow:data.qrHomeworkShow!==false, issueDate:data.issueDate||'', mainTitle:data.mainTitle||'',
+      className:data.className||'', upperTitle:data.upperTitle||'', lowerTitle:data.lowerTitle||'',
+      upperHasPhoto:data.upperHasPhoto===true, upperPhotoCaption:data.upperPhotoCaption||'',
+      showLunchDuty:data.showLunchDuty!==false, theme:data.theme||'#1f3a5f,#e8eef7',
+      photoTransform:data.photoTransform||{zoom:'1',x:'0',y:'0'},
+      upperPhotoTransform:data.upperPhotoTransform||{zoom:'1',x:'0',y:'0'},
+      photoFileId:photoFileId, upperPhotoFileId:upperPhotoFileId
+    };
+    const values = [normalized.issue,normalized.columnTitle,normalized.columnBody,normalized.notice,
+      normalized.qrRentaku,normalized.qrHomework,normalized.upperType,normalized.upperColTitle,
+      normalized.upperColBody,normalized.lowerType,normalized.lowerColTitle,normalized.lowerColBody,
+      normalized.photoCaption,normalized.upperWeek,normalized.lowerWeek,normalized.qrRenrakuLabel,
+      normalized.qrRenrakuShow,normalized.qrHomeworkLabel,normalized.qrHomeworkShow,normalized.issueDate,
+      normalized.mainTitle,normalized.className,normalized.upperTitle,normalized.lowerTitle,
+      normalized.upperHasPhoto,normalized.upperPhotoCaption,normalized.showLunchDuty,normalized.theme,
+      JSON.stringify(normalized.photoTransform),JSON.stringify(normalized.upperPhotoTransform),
+      normalized.photoFileId,normalized.upperPhotoFileId,2].map(function(value){return [value];});
+    sheet.getRange('B1:B33').setValues(values);
+    SpreadsheetApp.flush();
+    appendTsushinArchive_(normalized);
+    return {ok:true, message:"学級通信を保存し、過去の保存にも追加しました。"};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function parseTsushinJson_(value, fallback) {
+  if (!value) return fallback;
+  try { return JSON.parse(String(value)); } catch (e) { return fallback; }
+}
+
+function getTsushinPhotoFolder_() {
+  const props = PropertiesService.getDocumentProperties();
+  const savedId = props.getProperty('TSUSHIN_PHOTO_FOLDER_ID');
+  if (savedId) {
+    try { return DriveApp.getFolderById(savedId); } catch (e) { /* 再作成 */ }
+  }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("通信データ");
-  if (!sheet) return "エラー：『通信データ』シートが見つかりません。";
-  
-  const values = [data.issue,data.columnTitle,data.columnBody,data.notice,data.qrRentaku,data.qrHomework,
-    data.upperType,data.upperColTitle,data.upperColBody,data.lowerType,data.lowerColTitle,data.lowerColBody,
-    data.photoCaption,data.upperWeek,data.lowerWeek,data.qrRenrakuLabel,data.qrRenrakuShow,
-    data.qrHomeworkLabel,data.qrHomeworkShow,data.issueDate].map(function(value){return [value];});
-  sheet.getRange('B1:B20').setValues(values);
-  
-  return "スプレッドシートに保存しました！";
+  const folderName = ss.getName() + '_学級通信写真';
+  let parent = DriveApp.getRootFolder();
+  try {
+    const parents = DriveApp.getFileById(ss.getId()).getParents();
+    if (parents.hasNext()) parent = parents.next();
+  } catch (e) { /* 共有ドライブ等ではマイドライブ直下を使用 */ }
+  const folder = parent.createFolder(folderName);
+  props.setProperty('TSUSHIN_PHOTO_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function updateTsushinPhoto_(dataUrl, currentId, remove, issue, label) {
+  if (remove === true) return '';
+  if (!dataUrl) return currentId || '';
+  const match = String(dataUrl).match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw new Error(label + '写真の形式を確認してください。');
+  const bytes = Utilities.base64Decode(match[2]);
+  if (bytes.length > 3 * 1024 * 1024) throw new Error(label + '写真が大きすぎます（3MB以下にしてください）。');
+  const ext = match[1].split('/')[1].replace('jpeg','jpg');
+  const safeIssue = String(issue || '号数未設定').replace(/[\\/:*?"<>|]/g, '_');
+  const stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+  const blob = Utilities.newBlob(bytes, match[1], safeIssue + '_' + label + '_' + stamp + '.' + ext);
+  return getTsushinPhotoFolder_().createFile(blob).getId();
+}
+
+function getTsushinPhotoData_(fileId) {
+  if (!fileId) return '';
+  try {
+    const blob = DriveApp.getFileById(String(fileId)).getBlob();
+    return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+  } catch (e) {
+    return '';
+  }
+}
+
+function getTsushinArchiveSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('学級通信アーカイブ');
+  if (!sheet) {
+    sheet = ss.insertSheet('学級通信アーカイブ');
+    sheet.getRange(1,1,1,8).setValues([['ID','保存日時','号数','発行日','タイトル','上段週','下段週','保存データ']]);
+    sheet.setFrozenRows(1);
+    sheet.hideSheet();
+  }
+  return sheet;
+}
+
+function appendTsushinArchive_(form) {
+  const sheet = getTsushinArchiveSheet_();
+  const id = Utilities.getUuid();
+  const plans = getWeekPlans([Number(form.upperWeek), Number(form.lowerWeek)]);
+  const payload = {version:2, form:form, plans:plans};
+  sheet.appendRow([id,new Date(),form.issue||'',form.issueDate||'',form.mainTitle||'',form.upperWeek||'',form.lowerWeek||'',JSON.stringify(payload)]);
+}
+
+function listTsushinArchives(limit) {
+  const sheet = getTsushinArchiveSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const count = Math.min(Math.max(Number(limit)||50,1),100,lastRow-1);
+  const startRow = lastRow-count+1;
+  return sheet.getRange(startRow,1,count,7).getValues().reverse().map(function(row) {
+    return {id:String(row[0]), savedAt:row[1] instanceof Date ? Utilities.formatDate(row[1],'Asia/Tokyo','yyyy/MM/dd HH:mm') : String(row[1]||''),
+      issue:String(row[2]||''), issueDate:String(row[3]||''), title:String(row[4]||''),
+      upperWeek:String(row[5]||''), lowerWeek:String(row[6]||'')};
+  });
+}
+
+function loadTsushinArchive(archiveId) {
+  const sheet = getTsushinArchiveSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error('保存履歴がありません。');
+  const values = sheet.getRange(2,1,lastRow-1,8).getValues();
+  for (let i=values.length-1; i>=0; i--) {
+    if (String(values[i][0]) === String(archiveId)) {
+      const saved = parseTsushinJson_(values[i][7], null);
+      if (!saved) throw new Error('保存データを読み込めませんでした。');
+      const form = saved.form || saved;
+      return {form:form, plans:saved.plans||null,
+        photos:{photoData:getTsushinPhotoData_(form.photoFileId), upperPhotoData:getTsushinPhotoData_(form.upperPhotoFileId)}};
+    }
+  }
+  throw new Error('指定した保存履歴が見つかりません。');
 }
 
 //現在の入力データからPDFを生成し、各自のGoogleドライブに安全に保存する
