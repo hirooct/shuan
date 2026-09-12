@@ -147,8 +147,8 @@ function loadTsushinData() {
   if (Number(v[32]) >= 2) {
     Object.assign(result, {mainTitle:v[20]||'', className:v[21]||'', upperTitle:v[22]||'', lowerTitle:v[23]||'',
       upperHasPhoto:v[24]===true, upperPhotoCaption:v[25]||'', showLunchDuty:v[26]!==false,
-      theme:v[27]||'#1f3a5f,#e8eef7', photoTransform:parseTsushinJson_(v[28], {zoom:'1',x:'0',y:'0'}),
-      upperPhotoTransform:parseTsushinJson_(v[29], {zoom:'1',x:'0',y:'0'}),
+      theme:v[27]||'#1f3a5f,#e8eef7', photoTransform:parseTsushinJson_(v[28], {zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'}),
+      upperPhotoTransform:parseTsushinJson_(v[29], {zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'}),
       photoFileId:v[30]||'', upperPhotoFileId:v[31]||''});
   }
   return result;
@@ -195,8 +195,8 @@ function saveTsushinData(data) {
       className:data.className||'', upperTitle:data.upperTitle||'', lowerTitle:data.lowerTitle||'',
       upperHasPhoto:data.upperHasPhoto===true, upperPhotoCaption:data.upperPhotoCaption||'',
       showLunchDuty:data.showLunchDuty!==false, theme:data.theme||'#1f3a5f,#e8eef7',
-      photoTransform:data.photoTransform||{zoom:'1',x:'0',y:'0'},
-      upperPhotoTransform:data.upperPhotoTransform||{zoom:'1',x:'0',y:'0'},
+      photoTransform:data.photoTransform||{zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'},
+      upperPhotoTransform:data.upperPhotoTransform||{zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'},
       photoFileId:photoFileId, upperPhotoFileId:upperPhotoFileId
     };
     const values = [normalized.issue,normalized.columnTitle,normalized.columnBody,normalized.notice,
