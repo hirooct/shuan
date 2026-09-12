@@ -1,108 +1,269 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <style>
-      /* GASのiFrame環境でも確実に中央配置にするための修正 */
-      html, body {
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        background: #f0f4f8;
-      }
-      
-      body {
-        font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <style>
+    :root{--bg:#f3f6fa;--panel:#fff;--line:#dbe3ec;--text:#172033;--muted:#64748b;--blue:#2563eb;--blueSoft:#eaf1ff;--green:#059669;--shadow:0 8px 28px rgba(15,23,42,.08)}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,'Hiragino Kaku Gothic ProN',sans-serif}
+    button,input,textarea,select{font:inherit}
+    button{touch-action:manipulation}
 
-      /* メニューカードのデザイン調整 */
-      .menu-card {
-        background: white;
-        padding: 40px 30px;
-        border-radius: 16px;
-        box-shadow: 0 10px 30px rgba(51, 65, 85, 0.08);
-        text-align: center;
-        width: 340px;
-        box-sizing: border-box;
-      }
+    /* PC版：従来メニュー */
+    #desktopHome{height:100%;display:flex;justify-content:center;align-items:center;padding:20px}
+    .menu-card{background:white;padding:40px 30px;border-radius:16px;box-shadow:0 10px 30px rgba(51,65,85,.08);text-align:center;width:340px}
+    .menu-card h1{font-size:22px;margin:0 0 28px;letter-spacing:.05em}
+    .menu-btn{display:flex;align-items:center;justify-content:center;width:100%;height:54px;margin-bottom:16px;text-decoration:none;color:white;border-radius:10px;font-weight:700;font-size:15px}
+    .menu-btn:last-child{margin-bottom:0}.menu-btn.shuan{background:#2563eb}.menu-btn.tsushin{background:#0d9488}.menu-btn.setting{background:#475569}
 
-      h1 {
-        color: #1e293b;
-        font-size: 22px;
-        font-weight: 700;
-        margin-top: 0;
-        margin-bottom: 28px;
-        letter-spacing: 0.05em;
-      }
+    /* iPad版 */
+    #ipadApp{display:none;height:100dvh;overflow:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+    .ipad-shell{height:100%;display:grid;grid-template-columns:205px minmax(0,1fr);grid-template-rows:64px minmax(0,1fr);grid-template-areas:'side top' 'side main'}
+    .ipad-side{grid-area:side;background:#111827;color:white;padding:18px 12px;display:flex;flex-direction:column;gap:8px}
+    .ipad-brand{padding:4px 10px 18px}.ipad-brand strong{display:block;font-size:19px}.ipad-brand span{display:block;color:#94a3b8;font-size:11px;margin-top:4px}
+    .side-link,.side-btn{min-height:50px;border:0;border-radius:13px;padding:0 14px;display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:700;text-align:left;background:transparent;color:#cbd5e1}
+    .side-btn.active{background:white;color:#111827}.side-link:active,.side-btn:active{transform:scale(.985)}
+    .side-spacer{flex:1}
+    .ipad-top{grid-area:top;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 18px;gap:12px}
+    .top-left{display:flex;align-items:center;gap:10px;min-width:0}.top-title{font-weight:800;font-size:19px;white-space:nowrap}.week-nav{display:flex;align-items:center;gap:6px}
+    .week-nav button,.week-nav select,.action{border:1px solid var(--line);background:#fff;border-radius:11px;min-height:40px;padding:0 11px;font-weight:700}
+    .action.save{background:var(--green);border-color:var(--green);color:white;min-width:88px}.action:disabled{opacity:.45}
+    .save-state{font-size:11px;color:var(--muted);min-width:70px;text-align:right}
+    .ipad-main{grid-area:main;min-width:0;min-height:0;overflow:auto;padding:14px;overscroll-behavior:contain}
+    .loading{position:fixed;inset:0;background:rgba(248,250,252,.82);z-index:50;display:grid;place-items:center;font-weight:800}
+    .week-meta{font-size:12px;color:var(--muted);margin:0 0 10px 2px}
+    .day-strip{display:flex;gap:8px;overflow:auto;padding:2px 0 12px;scrollbar-width:none}.day-strip::-webkit-scrollbar{display:none}
+    .day-chip{flex:0 0 auto;min-width:92px;border:1px solid var(--line);background:white;border-radius:14px;padding:9px 12px;font-weight:800}.day-chip span{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}.day-chip.active{background:var(--blueSoft);border-color:#b9ccff;color:#1d4ed8}.day-chip.holiday{opacity:.5}
+    .editor-grid{display:grid;grid-template-columns:minmax(420px,1.2fr) minmax(300px,.8fr);gap:14px;align-items:start}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:var(--shadow)}
+    .card h2{font-size:16px;margin:0 0 12px}.stack{display:grid;gap:10px}
+    .field label{display:block;font-size:11px;font-weight:800;color:#526074;margin-bottom:5px}.field input,.field textarea,.field select{width:100%;border:1px solid var(--line);border-radius:11px;background:#fbfdff;padding:10px 11px;color:var(--text)}.field textarea{resize:vertical;min-height:78px;line-height:1.5}
+    .event-field input{background:#f8fafc;color:#475569}
+    .period{border:1px solid var(--line);border-radius:14px;padding:10px;background:#fff}.period-head{display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px;align-items:center;margin-bottom:7px}.period-no{width:40px;height:40px;border-radius:11px;background:#eef2f7;display:grid;place-items:center;font-weight:900}.subject-row{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:6px}.subject-row select{padding:0 4px;text-align:center}.period textarea{min-height:82px}
+    .mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.note textarea{min-height:110px}.muted{color:var(--muted);font-size:12px;line-height:1.55}
+    .bottom-tabs{display:none}
+    .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#111827;color:white;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:700;z-index:80;opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1}
 
-      /* ボタンの共通スタイル（余白やサイズを美しく統一） */
-      .btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 54px;
-        margin-bottom: 16px;
-        text-decoration: none;
-        color: white;
-        border-radius: 10px;
-        font-weight: bold;
-        font-size: 15px;
-        box-sizing: border-box;
-        transition: background-color 0.2s, transform 0.1s, box-shadow 0.2s;
-      }
-
-      /* 最後のボタンだけ下のマージンを無くして余白を均等に */
-      .btn:last-child {
-        margin-bottom: 0;
-      }
-
-      .btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      }
-
-      .btn:active {
-        transform: translateY(0);
-      }
-
-      /* 各ボタンのカラー調整（少し目に優しいモダンな色合いに変更） */
-      .btn-shuan {
-        background-color: #2563eb;
-      }
-      .btn-shuan:hover {
-        background-color: #1d4ed8;
-      }
-
-      .btn-tsushin {
-        background-color: #0d9488;
-      }
-      .btn-tsushin:hover {
-        background-color: #0f766e;
-      }
-
-      .btn-setting {
-        background-color: #475569;
-      }
-      .btn-setting:hover {
-        background-color: #334155;
-      }
-    </style>
-  </head>
-  <body>
+    @media (orientation:portrait) and (max-width:1100px){
+      .ipad-shell{grid-template-columns:1fr;grid-template-rows:58px minmax(0,1fr) 70px;grid-template-areas:'top' 'main' 'bottom'}
+      .ipad-side{display:none}.bottom-tabs{grid-area:bottom;display:grid;grid-template-columns:repeat(3,1fr);background:rgba(255,255,255,.96);border-top:1px solid var(--line);backdrop-filter:blur(12px)}
+      .bottom-tabs a,.bottom-tabs button{border:0;background:transparent;text-decoration:none;color:#64748b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:700}.bottom-tabs .active{color:var(--blue)}
+      .editor-grid{grid-template-columns:1fr}.ipad-main{padding:12px}.save-state{display:none}.top-title{font-size:17px}
+    }
+  </style>
+</head>
+<body>
+  <section id="desktopHome">
     <div class="menu-card">
       <h1><?= appName ?></h1>
       <? if (schoolName || className || teacherName) { ?>
-        <p style="margin:-16px 0 24px;color:#64748b;font-size:13px;">
-          <?= [schoolName, className, teacherName].filter(Boolean).join('　') ?>
-        </p>
+        <p style="margin:-16px 0 24px;color:#64748b;font-size:13px;"><?= [schoolName, className, teacherName].filter(Boolean).join('　') ?></p>
       <? } ?>
-      <a href="<?= getScriptUrl(); ?>?p=WeeklyPrint" class="btn btn-shuan">📅 週案ページ</a>
-      <a href="<?= getScriptUrl(); ?>?p=tsushin" class="btn btn-tsushin">✉️ 学級通信ページ</a>
-      <a href="<?= getScriptUrl(); ?>?p=setting" class="btn btn-setting">⚙️ 設定ページ</a>
+      <a href="<?= getScriptUrl(); ?>?p=WeeklyPrint" class="menu-btn shuan">📅 週案ページ</a>
+      <a href="<?= getScriptUrl(); ?>?p=tsushin" class="menu-btn tsushin">✉️ 学級通信ページ</a>
+      <a href="<?= getScriptUrl(); ?>?p=setting" class="menu-btn setting">⚙️ 設定ページ</a>
     </div>
-  </body>
+  </section>
+
+  <section id="ipadApp">
+    <div class="ipad-shell">
+      <aside class="ipad-side">
+        <div class="ipad-brand"><strong><?= appName ?></strong><span>iPad Edition</span></div>
+        <button class="side-btn active">📅 週案</button>
+        <a class="side-link" href="<?= getScriptUrl(); ?>?p=tsushin">📰 学級通信</a>
+        <a class="side-link" href="<?= getScriptUrl(); ?>?p=setting">⚙️ 設定</a>
+        <div class="side-spacer"></div>
+        <a class="side-link" href="<?= getScriptUrl(); ?>?p=WeeklyPrint">🖨️ A4週案表示</a>
+      </aside>
+
+      <header class="ipad-top">
+        <div class="top-left">
+          <div class="top-title">週案</div>
+          <div class="week-nav">
+            <button type="button" onclick="changeWeek(-1)">◀</button>
+            <select id="ipadWeekSelect" onchange="selectWeek(this.value)"></select>
+            <button type="button" onclick="changeWeek(1)">▶</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="save-state" id="saveState">読み込み中</span>
+          <button class="action save" id="ipadSaveBtn" onclick="saveWeek()" disabled>保存</button>
+        </div>
+      </header>
+
+      <main class="ipad-main">
+        <div class="week-meta" id="weekMeta"></div>
+        <div class="day-strip" id="dayStrip"></div>
+        <div class="editor-grid">
+          <section class="card">
+            <h2 id="dayTitle">授業</h2>
+            <div class="stack" id="lessonArea"></div>
+          </section>
+          <section class="stack">
+            <div class="card">
+              <h2>1日の予定・生活</h2>
+              <div class="stack">
+                <div class="field event-field"><label>行事</label><input id="f-event" readonly></div>
+                <div class="field"><label>朝</label><input id="f-morning"></div>
+                <div class="mini-grid">
+                  <div class="field"><label>中間休み</label><input id="f-rest"></div>
+                  <div class="field"><label>給食</label><input id="f-lunch"></div>
+                  <div class="field"><label>そうじ</label><input id="f-clean"></div>
+                  <div class="field"><label>昼休み</label><input id="f-recess"></div>
+                </div>
+                <div class="field"><label>下校</label><input id="f-leaving" list="leavingList"><datalist id="leavingList"></datalist></div>
+              </div>
+            </div>
+            <div class="card note">
+              <h2>宿題・備考</h2>
+              <div class="stack">
+                <div class="field"><label>宿題</label><textarea id="f-homework"></textarea></div>
+                <div class="field"><label>備考・交換授業・準備</label><textarea id="f-memo"></textarea></div>
+              </div>
+            </div>
+            <div class="card"><div class="muted">入力内容は既存の「週案」シートと共通です。PC版で開いても同じ内容が表示されます。</div></div>
+          </section>
+        </div>
+      </main>
+
+      <nav class="bottom-tabs">
+        <button class="active">📅<span>週案</span></button>
+        <a href="<?= getScriptUrl(); ?>?p=tsushin">📰<span>通信</span></a>
+        <a href="<?= getScriptUrl(); ?>?p=setting">⚙️<span>設定</span></a>
+      </nav>
+    </div>
+    <div class="loading" id="ipadLoading">週案を読み込んでいます…</div>
+    <div class="toast" id="toast"></div>
+  </section>
+
+<script>
+  const SCRIPT_URL = '<?= getScriptUrl(); ?>';
+  let ipadData = null;
+  let currentWeek = 1;
+  let currentDay = 0;
+  let dirty = false;
+
+  function isIPadDevice(){
+    return /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function showToast(message){
+    const el=document.getElementById('toast'); el.textContent=message; el.classList.add('show');
+    setTimeout(()=>el.classList.remove('show'),1800);
+  }
+
+  function setDirty(value){
+    dirty=value;
+    const save=document.getElementById('ipadSaveBtn');
+    if(save) save.disabled=!value;
+    const state=document.getElementById('saveState');
+    if(state) state.textContent=value?'未保存':'保存済み';
+  }
+
+  function fillWeekOptions(){
+    const s=document.getElementById('ipadWeekSelect');
+    for(let i=1;i<=52;i++){const o=document.createElement('option');o.value=i;o.textContent='第 '+i+'週';s.appendChild(o)}
+  }
+
+  function initIPad(){
+    document.getElementById('desktopHome').style.display='none';
+    document.getElementById('ipadApp').style.display='block';
+    fillWeekOptions();
+    google.script.run.withSuccessHandler(initial=>{
+      currentWeek=Number(initial.weekNum||1);
+      document.getElementById('ipadWeekSelect').value=currentWeek;
+      renderWeek(initial.weekly);
+    }).withFailureHandler(showLoadError).getWeeklyPageInitialData();
+  }
+
+  function showLoadError(err){
+    document.getElementById('ipadLoading').textContent='読み込みに失敗しました: '+(err&&err.message?err.message:err);
+  }
+
+  function renderWeek(data){
+    if(!data||data.error){showLoadError({message:data&&data.error?data.error:'データを取得できませんでした'});return}
+    ipadData=data;
+    currentWeek=Number(data.weekNum||currentWeek);
+    currentDay=Math.min(currentDay,6);
+    document.getElementById('ipadWeekSelect').value=currentWeek;
+    document.getElementById('weekMeta').textContent=[data.year+'年度',data.schoolName,data.className,data.teacherName,data.startDate+'〜'+data.endDate].filter(Boolean).join('　');
+    document.getElementById('leavingList').innerHTML=(data.leavingTimes||[]).map(v=>'<option value="'+escapeHtml(v)+'"></option>').join('');
+    renderDayStrip(); renderDay();
+    document.getElementById('ipadLoading').style.display='none';
+    setDirty(false);
+  }
+
+  function renderDayStrip(){
+    const strip=document.getElementById('dayStrip'); strip.innerHTML='';
+    ipadData.days.forEach((label,i)=>{
+      const b=document.createElement('button'); b.className='day-chip'+(i===currentDay?' active':'')+((ipadData.holidayRow[i]||'').includes('休')?' holiday':'');
+      const day=label.match(/\((.)\)/); const date=label.replace(/\(.+\)/,'');
+      b.innerHTML=(day?day[1]:'')+'<span>'+date+'</span>'; b.onclick=()=>switchDay(i); strip.appendChild(b);
+    });
+  }
+
+  function switchDay(index){
+    flushDay(); currentDay=index; renderDayStrip(); renderDay();
+  }
+
+  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]))}
+  function subjectOptions(selected){
+    return '<option value=""></option>'+(ipadData.dropdownSubjects||[]).map(s=>'<option value="'+escapeHtml(s)+'"'+(s===selected?' selected':'')+'>'+escapeHtml(s)+'</option>').join('');
+  }
+
+  function renderDay(){
+    const t=ipadData.timetable; const i=currentDay;
+    document.getElementById('dayTitle').textContent=ipadData.days[i]+' の授業';
+    ['event','morning','rest','lunch','clean','recess','leaving','homework','memo'].forEach(k=>{const el=document.getElementById('f-'+k);if(el) el.value=(t[k]&&t[k][i])||''});
+    const area=document.getElementById('lessonArea'); area.innerHTML='';
+    for(let p=1;p<=6;p++){
+      const key='p'+p; const cell=(t[key]&&t[key][i])||{subject:'',content:''};
+      const box=document.createElement('div'); box.className='period';
+      box.innerHTML='<div class="period-head"><div class="period-no">'+p+'</div><div class="subject-row"><input id="sub-'+p+'" value="'+escapeHtml(cell.subject)+'" placeholder="教科"><select aria-label="教科一覧" onchange="document.getElementById(\'sub-'+p+'\').value=this.value; markChanged()">'+subjectOptions(cell.subject)+'</select></div></div><div class="field"><textarea id="cont-'+p+'" placeholder="学習内容・準備・指導メモ">'+escapeHtml(cell.content)+'</textarea></div>';
+      area.appendChild(box);
+    }
+    const holiday=(ipadData.holidayRow[i]||'').includes('休');
+    area.querySelectorAll('input,textarea,select').forEach(el=>el.disabled=holiday);
+    ['f-morning','f-rest','f-lunch','f-clean','f-recess','f-leaving','f-homework','f-memo'].forEach(id=>document.getElementById(id).disabled=holiday);
+    document.querySelectorAll('#ipadApp input:not([readonly]),#ipadApp textarea,#ipadApp select:not(#ipadWeekSelect)').forEach(el=>el.oninput=markChanged);
+  }
+
+  function markChanged(){setDirty(true)}
+
+  function flushDay(){
+    if(!ipadData)return; const t=ipadData.timetable,i=currentDay;
+    ['morning','rest','lunch','clean','recess','leaving','homework','memo'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)t[k][i]=el.value});
+    for(let p=1;p<=6;p++){const key='p'+p;t[key][i]={subject:document.getElementById('sub-'+p)?.value||'',content:document.getElementById('cont-'+p)?.value||''}}
+  }
+
+  function collectClientData(){
+    flushDay(); const t=ipadData.timetable;
+    return {morning:t.morning,p1:t.p1,p2:t.p2,rest:t.rest,p3:t.p3,p4:t.p4,lunch:t.lunch,clean:t.clean,recess:t.recess,p5:t.p5,p6:t.p6,leaving:t.leaving,homework:t.homework,memo:t.memo};
+  }
+
+  function saveWeek(){
+    if(!ipadData)return; const btn=document.getElementById('ipadSaveBtn'); btn.disabled=true; document.getElementById('saveState').textContent='保存中…';
+    google.script.run.withSuccessHandler(result=>{
+      if(result&&result.error){alert(result.error);btn.disabled=false;return}
+      setDirty(false); showToast('保存しました');
+    }).withFailureHandler(err=>{alert('保存に失敗しました: '+(err&&err.message?err.message:err));btn.disabled=false;document.getElementById('saveState').textContent='未保存'}).saveWeeklyData(currentWeek,ipadData.colIndices,collectClientData());
+  }
+
+  function selectWeek(value){
+    const next=Number(value); if(next===currentWeek)return;
+    if(dirty&&!confirm('未保存の変更があります。週を移動しますか？')){document.getElementById('ipadWeekSelect').value=currentWeek;return}
+    loadWeek(next);
+  }
+  function changeWeek(offset){const next=Math.max(1,Math.min(52,currentWeek+offset));selectWeek(next)}
+  function loadWeek(week){
+    document.getElementById('ipadLoading').style.display='grid'; document.getElementById('ipadLoading').textContent='週案を読み込んでいます…';
+    google.script.run.withSuccessHandler(payload=>{currentWeek=week;currentDay=0;renderWeek(payload.weekly||payload)}).withFailureHandler(showLoadError).getWeeklyPageData(week);
+  }
+
+  window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+  window.addEventListener('load',()=>{if(isIPadDevice())initIPad()});
+</script>
+</body>
 </html>
