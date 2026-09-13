@@ -1,7 +1,7 @@
 /**
  * 配付・初期設定・保守機能
  */
-var SHUAN_APP_VERSION = '3.4.0';
+var SHUAN_APP_VERSION = '3.5.0';
 var SHUAN_APP_UPDATED_AT = '2026-09-13';
 var SHUAN_RESET_CONFIRM_TEXT = '初期化する';
 
@@ -132,6 +132,7 @@ function getConfigEntries() {
   const count = lastRow - 2;
   const timeZone = Session.getScriptTimeZone();
   const result = [];
+  const calendarRows = typeof getCalendarSyncRowMap_ === 'function' ? getCalendarSyncRowMap_() : {};
 
   [
     { type: 'event', label: '行事', dateCol: 6 },
@@ -151,7 +152,8 @@ function getConfigEntries() {
         typeLabel: config.label,
         row: index + 3,
         date: date,
-        name: String(row[1] || '')
+        name: String(row[1] || ''),
+        source: config.type === 'event' && calendarRows[String(index + 3)] ? 'calendar' : 'manual'
       });
     });
   });
@@ -168,6 +170,9 @@ function updateConfigEntry(type, rowNumber, dateStr, nameStr) {
   const dateCol = type === 'event' ? 6 : type === 'holiday' ? 8 : 0;
   if (!dateCol || !Number.isInteger(row) || row < 3 || row > sheet.getMaxRows()) {
     return { error: '更新対象が正しくありません。' };
+  }
+  if (type === 'event' && typeof getCalendarSyncRowMap_ === 'function' && getCalendarSyncRowMap_()[String(row)]) {
+    return { error: 'Googleカレンダーから同期した行事は、Googleカレンダー側で編集してください。' };
   }
 
   const name = String(nameStr || '').trim();
@@ -195,6 +200,9 @@ function deleteConfigEntry(type, rowNumber) {
   const dateCol = type === 'event' ? 6 : type === 'holiday' ? 8 : 0;
   if (!dateCol || !Number.isInteger(row) || row < 3 || row > sheet.getMaxRows()) {
     return { error: '削除対象が正しくありません。' };
+  }
+  if (type === 'event' && typeof getCalendarSyncRowMap_ === 'function' && getCalendarSyncRowMap_()[String(row)]) {
+    return { error: 'Googleカレンダーから同期した行事は、Googleカレンダー側で削除してください。次回同期時に週案からも消えます。' };
   }
 
   sheet.getRange(row, dateCol, 1, 2).clearContent();
@@ -276,6 +284,10 @@ function initializeForDistribution(confirmText) {
     if (communicationArchive && communicationArchive.getLastRow() > 1) {
       communicationArchive.getRange(2, 1, communicationArchive.getLastRow() - 1, communicationArchive.getLastColumn()).clearContent();
     }
+    const calendarSyncSheet = ss.getSheetByName('カレンダー同期');
+    if (calendarSyncSheet && calendarSyncSheet.getLastRow() > 1) {
+      calendarSyncSheet.getRange(2, 1, calendarSyncSheet.getLastRow() - 1, calendarSyncSheet.getLastColumn()).clearContent();
+    }
     const documentProps = PropertiesService.getDocumentProperties();
     const photoFolderId = documentProps.getProperty('TSUSHIN_PHOTO_FOLDER_ID');
     if (photoFolderId) {
@@ -283,9 +295,11 @@ function initializeForDistribution(confirmText) {
     }
     ['APP_NAME', 'SCHOOL_NAME', 'CLASS_NAME', 'TEACHER_NAME',
       'TSUSHIN_PHOTO_FOLDER_ID',
+      'CALENDAR_SYNC_CONFIG_V1', 'CALENDAR_SYNC_STATUS_V1',
       SHUAN_PRODUCTIVITY_KEYS.PATTERNS, SHUAN_PRODUCTIVITY_KEYS.PHRASES,
       SHUAN_PRODUCTIVITY_KEYS.TSUSHIN, SHUAN_PRODUCTIVITY_KEYS.WIZARD
     ].forEach(function(key) { documentProps.deleteProperty(key); });
+    if (typeof updateCalendarSyncTrigger_ === 'function') updateCalendarSyncTrigger_(false);
     clearShuanCaches_();
     SpreadsheetApp.flush();
 

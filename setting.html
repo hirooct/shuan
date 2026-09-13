@@ -51,6 +51,13 @@
       .danger-zone h2 { color: #991b1b; background: #fee2e2; margin-top: 0; }
       .btn-reset { background: #b91c1c; color: white; border: none; border-radius: 6px; padding: 10px 16px; cursor: pointer; font-weight: bold; }
       .event-empty { color: #64748b; text-align: center; padding: 16px; }
+      .calendar-sync-panel { border:2px solid #bfdbfe; background:#eff6ff; border-radius:10px; padding:15px; margin:12px 0 20px; }
+      .calendar-sync-grid { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; align-items:end; }
+      .calendar-sync-options { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:10px; }
+      .calendar-sync-options label { display:flex; align-items:center; gap:6px; margin:0; }
+      .calendar-status { margin-top:10px; padding:9px 11px; border-radius:7px; background:#fff; color:#475569; font-size:12px; line-height:1.5; }
+      .source-calendar { display:inline-block; padding:3px 7px; border-radius:999px; background:#dbeafe; color:#1d4ed8; font-size:10px; font-weight:bold; }
+      @media(max-width:800px){.calendar-sync-grid{grid-template-columns:1fr}}
       .feature-panel { border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-top:12px; background:#fff; }
       .feature-panel textarea { width:100%; min-height:100px; box-sizing:border-box; padding:8px; }
       .feature-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
@@ -166,6 +173,26 @@
 
       <h2>📌 行事・休日の管理</h2>
       <p style="font-size:12px;color:#64748b;">週案ページで登録した行事・休日を編集・削除できます。</p>
+      <div class="calendar-sync-panel">
+        <strong>📅 Googleカレンダー → 週案</strong>
+        <p style="font-size:12px;color:#475569;line-height:1.6;">選択したカレンダーの予定を行事欄へ同期します。手入力の行事は変更しません。</p>
+        <div class="calendar-sync-grid">
+          <div class="field"><label>同期するGoogleカレンダー</label><select id="calendarSyncId"><option value="">読み込み中...</option></select></div>
+          <div class="field"><label>開始日</label><input type="date" id="calendarSyncStart"></div>
+          <div class="field"><label>終了日</label><input type="date" id="calendarSyncEnd"></div>
+        </div>
+        <div class="calendar-sync-options">
+          <label><input type="checkbox" id="calendarIncludeAllDay" checked style="width:auto"> 終日予定</label>
+          <label><input type="checkbox" id="calendarIncludeTimed" checked style="width:auto"> 時刻付き予定</label>
+          <label><input type="checkbox" id="calendarIncludeTimeLabel" style="width:auto"> 行事名に時刻を付ける</label>
+          <label><input type="checkbox" id="calendarAutoSync" checked style="width:auto"> 毎日自動同期</label>
+        </div>
+        <div class="feature-actions">
+          <button type="button" class="btn-feature" onclick="saveCalendarSyncOnly()">同期設定を保存</button>
+          <button type="button" class="btn-holiday" style="width:auto;" onclick="syncCalendarNow()">今すぐ同期</button>
+        </div>
+        <div id="calendarSyncStatus" class="calendar-status">同期状態を確認中...</div>
+      </div>
       <table id="eventManageTable">
         <thead><tr><th>種別</th><th>日付</th><th>名称</th><th style="width:130px;">操作</th></tr></thead>
         <tbody><tr><td colspan="4" class="event-empty">読み込み中...</td></tr></tbody>
@@ -422,6 +449,7 @@
           document.getElementById('loading').style.display = 'none';
           loadSystemStatus();
           loadConfigEntries();
+          loadCalendarSyncSetup();
           loadProductivitySettings();
 
         } catch (jsError) {
@@ -460,7 +488,7 @@
         }
 
         document.getElementById('spinner').style.display = 'inline-block';
-        document.getElementById('loadingText').innerText = "内閣府公式のCSVから祝日データを一括抽出中...";
+        document.getElementById('loadingText').innerText = "Google祝日カレンダーから祝日を取得中...";
         document.getElementById('loading').style.display = 'flex';
 
         google.script.run
@@ -518,12 +546,12 @@
               return;
             }
             tbody.innerHTML = result.entries.map(function(item) {
+              var synced = item.source === 'calendar';
               return '<tr data-type="' + item.type + '" data-row="' + item.row + '">' +
-                '<td>' + escapeHtml(item.typeLabel) + '</td>' +
-                '<td><input type="date" class="entry-date" value="' + escapeHtml(item.date) + '"></td>' +
-                '<td><input type="text" class="entry-name" value="' + escapeHtml(item.name) + '"></td>' +
-                '<td><button type="button" class="btn-small btn-edit" onclick="saveEntry(this)">保存</button> ' +
-                '<button type="button" class="btn-small btn-delete" onclick="removeEntry(this)">削除</button></td>' +
+                '<td>' + escapeHtml(item.typeLabel) + (synced ? '<br><span class="source-calendar">Google同期</span>' : '') + '</td>' +
+                '<td><input type="date" class="entry-date" value="' + escapeHtml(item.date) + '" ' + (synced?'disabled':'') + '></td>' +
+                '<td><input type="text" class="entry-name" value="' + escapeHtml(item.name) + '" ' + (synced?'disabled':'') + '></td>' +
+                '<td>' + (synced ? '<span style="font-size:11px;color:#64748b">カレンダー側で編集</span>' : '<button type="button" class="btn-small btn-edit" onclick="saveEntry(this)">保存</button> <button type="button" class="btn-small btn-delete" onclick="removeEntry(this)">削除</button>') + '</td>' +
                 '</tr>';
             }).join('');
           })
@@ -533,6 +561,70 @@
               escapeHtml(err.message) + '</td></tr>';
           })
           .getConfigEntries();
+      }
+
+      function collectCalendarSyncConfig() {
+        return {
+          calendarId: document.getElementById('calendarSyncId').value,
+          startDate: document.getElementById('calendarSyncStart').value,
+          endDate: document.getElementById('calendarSyncEnd').value,
+          includeAllDay: document.getElementById('calendarIncludeAllDay').checked,
+          includeTimed: document.getElementById('calendarIncludeTimed').checked,
+          includeTimeLabel: document.getElementById('calendarIncludeTimeLabel').checked,
+          autoSync: document.getElementById('calendarAutoSync').checked
+        };
+      }
+
+      function defaultCalendarSyncDates() {
+        var year = Number(document.getElementById('nendo').value) || new Date().getFullYear();
+        return {start:year+'-04-01', end:(year+1)+'-03-31'};
+      }
+
+      function showCalendarSyncStatus(status) {
+        var box = document.getElementById('calendarSyncStatus');
+        if (!status) { box.textContent = 'まだ同期していません。'; return; }
+        if (status.error) { box.textContent = '前回の同期エラー：'+status.error; return; }
+        var at = status.syncedAt ? new Date(status.syncedAt).toLocaleString('ja-JP') : '';
+        box.textContent = '最終同期：'+at+' ／ '+(status.calendarName||'')+' ／ '+(status.total||0)+'件（追加'+(status.added||0)+'・更新'+(status.updated||0)+'・削除'+(status.removed||0)+'）';
+      }
+
+      function loadCalendarSyncSetup() {
+        google.script.run.withSuccessHandler(function(result) {
+          var select = document.getElementById('calendarSyncId');
+          select.innerHTML = '<option value="">カレンダーを選択</option>' + (result.calendars||[]).map(function(calendar) {
+            return '<option value="'+escapeHtml(calendar.id)+'">'+escapeHtml(calendar.name)+(calendar.selected?'（表示中）':'')+'</option>';
+          }).join('');
+          var config=result.config||{}, defaults=defaultCalendarSyncDates();
+          select.value=config.calendarId||'';
+          document.getElementById('calendarSyncStart').value=config.startDate||defaults.start;
+          document.getElementById('calendarSyncEnd').value=config.endDate||defaults.end;
+          document.getElementById('calendarIncludeAllDay').checked=config.includeAllDay!==false;
+          document.getElementById('calendarIncludeTimed').checked=config.includeTimed!==false;
+          document.getElementById('calendarIncludeTimeLabel').checked=config.includeTimeLabel===true;
+          document.getElementById('calendarAutoSync').checked=config.autoSync!==false;
+          showCalendarSyncStatus(result.status);
+        }).withFailureHandler(function(err) {
+          document.getElementById('calendarSyncStatus').textContent='カレンダー一覧を取得できませんでした：'+err.message;
+        }).getCalendarSyncSetup();
+      }
+
+      function saveCalendarSyncOnly() {
+        google.script.run.withSuccessHandler(function(result) {
+          alert(result.message||result.error); if(result.success) loadCalendarSyncSetup();
+        }).withFailureHandler(function(err){alert('同期設定を保存できませんでした：'+err.message);}).saveCalendarSyncConfig(collectCalendarSyncConfig());
+      }
+
+      function syncCalendarNow() {
+        if (!confirm('Googleカレンダーの予定を週案の行事欄へ同期しますか？')) return;
+        document.getElementById('loadingText').innerText='Googleカレンダーを同期中...';
+        document.getElementById('loading').style.display='flex';
+        google.script.run.withSuccessHandler(function(saved) {
+          if (!saved || saved.error) { document.getElementById('loading').style.display='none'; alert(saved&&saved.error?saved.error:'同期設定を保存できませんでした。'); return; }
+          google.script.run.withSuccessHandler(function(result) {
+            document.getElementById('loading').style.display='none';
+            alert(result.message||result.error); showCalendarSyncStatus(result); loadConfigEntries();
+          }).withFailureHandler(function(err){document.getElementById('loading').style.display='none';alert('同期に失敗しました：'+err.message);}).syncGoogleCalendarToWeeklyPlan();
+        }).withFailureHandler(function(err){document.getElementById('loading').style.display='none';alert('同期設定を保存できませんでした：'+err.message);}).saveCalendarSyncConfig(collectCalendarSyncConfig());
       }
 
       function saveEntry(button) {

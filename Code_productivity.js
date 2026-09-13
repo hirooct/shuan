@@ -149,10 +149,26 @@ function restoreAppBackup(fileId, confirmText) {
       dst.getRange(1, 1, clearRows, clearCols).clearContent();
       dst.getRange(1, 1, rows, cols).setValues(restored);
     });
+    // カレンダー同期IDも戻し、復元後の再同期で同じ行事が重複しないようにする。
+    const syncName = 'カレンダー同期';
+    const srcSync = source.getSheetByName(syncName);
+    if (srcSync) {
+      let dstSync = target.getSheetByName(syncName);
+      if (!dstSync) dstSync = target.insertSheet(syncName);
+      const rows = srcSync.getLastRow(), cols = srcSync.getLastColumn();
+      if (dstSync.getMaxRows() < rows) dstSync.insertRowsAfter(dstSync.getMaxRows(), rows - dstSync.getMaxRows());
+      if (dstSync.getMaxColumns() < cols) dstSync.insertColumnsAfter(dstSync.getMaxColumns(), cols - dstSync.getMaxColumns());
+      dstSync.clearContents();
+      if (rows && cols) dstSync.getRange(1, 1, rows, cols).setValues(srcSync.getRange(1, 1, rows, cols).getValues());
+      if (!dstSync.isSheetHidden()) dstSync.hideSheet();
+    }
     const props = PropertiesService.getDocumentProperties();
     const backups = parseJsonProperty_(props, SHUAN_PRODUCTIVITY_KEYS.BACKUPS, []);
     const selected = backups.filter(function(item) { return item.id === String(fileId); })[0];
     if (selected && selected.metadata) props.setProperties(selected.metadata);
+    if (typeof getCalendarSyncConfig_ === 'function' && typeof updateCalendarSyncTrigger_ === 'function') {
+      try { updateCalendarSyncTrigger_(getCalendarSyncConfig_().autoSync !== false && Boolean(getCalendarSyncConfig_().calendarId)); } catch(e) {}
+    }
     clearShuanCaches_();
     SpreadsheetApp.flush();
     return { success: true, message: 'バックアップから復元しました。復元直前の状態も自動保存しています。' };
