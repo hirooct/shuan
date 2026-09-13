@@ -59,6 +59,7 @@
     
     .btn-nav { background: #475569; color: white; padding: 5px 10px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-family: inherit; }
     .btn-nav:hover { background: #64748b; }
+    .ipad-only { display: none; }
 
     /* モーダル */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 200; }
@@ -166,11 +167,60 @@
       .print-container { margin:0; padding:5px; min-width:720px; }
       body { overflow-x:auto; }
     }
+
+    /* iPad・タブレット専用表示。印刷時は下の @media print が優先される。 */
+    body.ipad-ui { overflow-x: hidden; padding-bottom: env(safe-area-inset-bottom); }
+    body.ipad-ui .ipad-only { display: flex; }
+    body.ipad-ui .no-print-bar { height: auto; min-height: 58px; flex-wrap: wrap; padding: calc(8px + env(safe-area-inset-top)) 10px 8px; gap: 8px; }
+    body.ipad-ui .no-print-bar .btn, body.ipad-ui .btn-nav, body.ipad-ui .no-print-bar select { min-height: 44px; font-size: 14px; border-radius: 9px; }
+    body.ipad-ui .no-print-bar .btn { flex: 0 0 auto; }
+    body.ipad-ui .app-title { font-size: 15px; font-weight: bold; margin-right: 2px; }
+    body.ipad-ui .ipad-extra { display: none; }
+    body.ipad-ui.tools-open .ipad-extra { display: inline-flex; flex: 1 1 30%; justify-content: center; }
+    body.ipad-ui #btnOpenSlide.ipad-extra { display: none; }
+    body.ipad-ui.tools-open #btnOpenSlide.ipad-extra { display: inline-flex; }
+    body.ipad-ui .btn-save { margin-left: auto; min-width: 94px; justify-content: center; }
+    body.ipad-ui .draft-status { order: 3; width: 100%; min-width: 0; text-align: right; padding-right: 4px; }
+    body.ipad-ui .ipad-day-nav { order: 4; width: 100%; gap: 5px; overflow-x: auto; padding: 4px 0 1px; }
+    body.ipad-ui .ipad-day-button { flex: 1 0 76px; min-height: 50px; border: 1px solid #64748b; border-radius: 10px; background: #334155; color: #fff; font-family: inherit; font-weight: bold; }
+    body.ipad-ui .ipad-day-button small { display: block; margin-top: 2px; font-size: 10px; font-weight: normal; color: #cbd5e1; }
+    body.ipad-ui .ipad-day-button.active { background: #2563eb; border-color: #93c5fd; box-shadow: inset 0 0 0 2px #bfdbfe; }
+    body.ipad-ui .print-container { width: 100%; max-width: none; min-width: 0; margin: 0; padding: 12px; box-shadow: none; }
+    body.ipad-ui .header-table { margin: 4px 0 10px; }
+    body.ipad-ui .main-table { table-layout: fixed; }
+    body.ipad-ui .main-table tr > :not(:first-child) { display: none; }
+    body.ipad-ui[data-ipad-day="0"] .main-table tr > :nth-child(2),
+    body.ipad-ui[data-ipad-day="1"] .main-table tr > :nth-child(3),
+    body.ipad-ui[data-ipad-day="2"] .main-table tr > :nth-child(4),
+    body.ipad-ui[data-ipad-day="3"] .main-table tr > :nth-child(5),
+    body.ipad-ui[data-ipad-day="4"] .main-table tr > :nth-child(6),
+    body.ipad-ui[data-ipad-day="5"] .main-table tr > :nth-child(7),
+    body.ipad-ui[data-ipad-day="6"] .main-table tr > :nth-child(8) { display: table-cell; width: auto; }
+    body.ipad-ui .col-label { width: 78px; min-width: 78px; font-size: 14px; vertical-align: middle; }
+    body.ipad-ui .day-header { height: 48px; font-size: 15px; }
+    body.ipad-ui .period-row td { height: 116px; }
+    body.ipad-ui .row-homework td { height: 120px; }
+    body.ipad-ui .row-memo td { height: 150px; }
+    body.ipad-ui .row-short td, body.ipad-ui .row-break td { height: 58px; }
+    body.ipad-ui .subject-input, body.ipad-ui .edit-trigger { font-size: 16px !important; padding: 8px; line-height: 1.45; }
+    body.ipad-ui .subject-combo-container { min-height: 44px; }
+    body.ipad-ui .subject-select { width: 48px; min-width: 48px; font-size: 16px; }
+    body.ipad-ui .modal-box { width: min(92vw, 520px) !important; max-height: 86vh; overflow-y: auto; border-radius: 14px; }
+    body.ipad-ui .modal-field input, body.ipad-ui .modal-field select, body.ipad-ui .modal-buttons .btn { min-height: 44px; font-size: 16px; }
+
+    @media print {
+      body.ipad-ui .main-table tr > :not(:first-child) { display: table-cell !important; }
+      body.ipad-ui .main-table th, body.ipad-ui .main-table td,
+      body.ipad-ui .col-label, body.ipad-ui .day-header { font-size: 8.5px !important; }
+      body.ipad-ui .subject-input, body.ipad-ui .edit-trigger { font-size: 8.5px !important; padding: 1px 2px !important; line-height: 1.15 !important; }
+      body.ipad-ui .subject-combo-container { min-height: 0 !important; }
+      body.ipad-ui .subject-select { display: none !important; }
+    }
   </style>
 </head>
 <body>
   <div class="no-print-bar">
-    <span>週案Web</span>
+    <span class="app-title">週案Web</span>
     
     <button class="btn-nav" onclick="changeWeek(-1)">◀</button>
     <select id="weekSelect" onchange="handleWeekSelectChange(this.value)">
@@ -178,18 +228,28 @@
     </select>
     <button class="btn-nav" onclick="changeWeek(1)">▶</button>
     
-    <button class="btn btn-load-default" onclick="applyDefaultTimetable()">📅 基本時間割読込</button>
-    <button class="btn btn-tools" onclick="openTimetableTool()">🔁 時間割変更</button>
-    <button class="btn btn-tools" onclick="copyPreviousWeek()">📋 前週から作成</button>
-    <button class="btn btn-tools" onclick="insertQuickPhrase()">✍️ 定型文</button>
-    <button class="btn btn-open-modal" onclick="openRegModal()">✨ 休日・行事登録</button>
-    <button class="btn btn-update-slide" onclick="executeSlideUpdate()">🖼️ スライド更新</button>
+    <button class="btn btn-tools ipad-only" id="ipadToolsToggle" onclick="toggleIpadTools()">☰ 操作</button>
+    <button class="btn btn-load-default ipad-extra" onclick="applyDefaultTimetable()">📅 基本時間割読込</button>
+    <button class="btn btn-tools ipad-extra" onclick="openTimetableTool()">🔁 時間割変更</button>
+    <button class="btn btn-tools ipad-extra" onclick="copyPreviousWeek()">📋 前週から作成</button>
+    <button class="btn btn-tools ipad-extra" onclick="insertQuickPhrase()">✍️ 定型文</button>
+    <button class="btn btn-open-modal ipad-extra" onclick="openRegModal()">✨ 休日・行事登録</button>
+    <button class="btn btn-update-slide ipad-extra" onclick="executeSlideUpdate()">🖼️ スライド更新</button>
     
-    <button class="btn" id="btnOpenSlide" style="background: #e2e8f0; color: #94a3b8; cursor: not-allowed;" onclick="openLatestSlide()" disabled>🔗 スライドを開く</button>
+    <button class="btn ipad-extra" id="btnOpenSlide" style="background: #e2e8f0; color: #94a3b8; cursor: not-allowed;" onclick="openLatestSlide()" disabled>🔗 スライドを開く</button>
     
-    <button class="btn btn-print" onclick="window.print()">🖨️ 印刷</button>
+    <button class="btn btn-print ipad-extra" onclick="window.print()">🖨️ 印刷</button>
     <button class="btn btn-save" id="btnSave" onclick="saveToSpreadsheet()" disabled>💾 保存</button>
     <span class="draft-status" id="draftStatus">下書き待機中</span>
+    <div class="ipad-day-nav ipad-only" id="ipadDayNav">
+      <button class="ipad-day-button active" data-day="0" onclick="setIpadDay(0)">月<small></small></button>
+      <button class="ipad-day-button" data-day="1" onclick="setIpadDay(1)">火<small></small></button>
+      <button class="ipad-day-button" data-day="2" onclick="setIpadDay(2)">水<small></small></button>
+      <button class="ipad-day-button" data-day="3" onclick="setIpadDay(3)">木<small></small></button>
+      <button class="ipad-day-button" data-day="4" onclick="setIpadDay(4)">金<small></small></button>
+      <button class="ipad-day-button" data-day="5" onclick="setIpadDay(5)">土<small></small></button>
+      <button class="ipad-day-button" data-day="6" onclick="setIpadDay(6)">日<small></small></button>
+    </div>
   </div>
 
   <div class="modal-overlay" id="timetableModal" style="display:none;">
@@ -261,6 +321,42 @@
     let productivitySettings = {patterns:[], phrases:[]};
     let draftTimer = null;
     let lastEditableElement = null;
+    let ipadDay = (function(){ const d=new Date().getDay(); return d===0 ? 6 : d-1; })();
+
+    function shouldUseIpadUi() {
+      const isiPad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      return isiPad || (navigator.maxTouchPoints > 1 && window.innerWidth <= 1400);
+    }
+
+    function applyIpadMode() {
+      document.body.classList.toggle('ipad-ui', shouldUseIpadUi());
+      if (document.body.classList.contains('ipad-ui')) setIpadDay(ipadDay, false);
+    }
+
+    function toggleIpadTools() {
+      document.body.classList.toggle('tools-open');
+      document.getElementById('ipadToolsToggle').textContent = document.body.classList.contains('tools-open') ? '× 閉じる' : '☰ 操作';
+    }
+
+    function setIpadDay(day, scrollToTop) {
+      ipadDay = Math.max(0, Math.min(6, Number(day) || 0));
+      document.body.dataset.ipadDay = String(ipadDay);
+      document.querySelectorAll('.ipad-day-button').forEach(function(button) {
+        button.classList.toggle('active', Number(button.dataset.day) === ipadDay);
+      });
+      if (scrollToTop !== false) {
+        const area = document.getElementById('contentArea');
+        if (area) area.scrollIntoView({behavior:'smooth', block:'start'});
+      }
+    }
+
+    function updateIpadDayLabels() {
+      document.querySelectorAll('.ipad-day-button').forEach(function(button) {
+        const header = document.getElementById('th' + button.dataset.day);
+        const small = button.querySelector('small');
+        if (header && small) small.textContent = header.textContent.replace(/\s+/g, ' ').trim();
+      });
+    }
 
     function setDirty(dirty) {
       isDirty = dirty;
@@ -442,6 +538,7 @@
     }
 
     window.onload = function() {
+      applyIpadMode();
       google.script.run.withSuccessHandler(function(initial) {
         productivitySettings = initial.productivity || productivitySettings;
         productivitySettings.defaultTimetable = initial.defaultTimetable || {};
@@ -449,7 +546,7 @@
         if (globalSlideUrl) {
           const btn = document.getElementById('btnOpenSlide');
           btn.disabled = false;
-          btn.className = "btn btn-open-slide";
+          btn.className = "btn btn-open-slide ipad-extra";
           btn.style = "";
         }
         document.getElementById('weekSelect').value = initial.weekNum;
@@ -480,6 +577,7 @@
           e.returnValue = ''; 
         }
       });
+      window.addEventListener('resize', applyIpadMode);
     };
 
     function loadWeeklyData(weekNum, prepared) {
@@ -504,6 +602,7 @@
           document.getElementById('th'+i).innerHTML = data.days[i];
           document.getElementById('th'+i).className = "day-header" + hFlags[i];
         }
+        updateIpadDayLabels();
 
         let selectOptionsHtml = '<option value=""></option>';
         if (data.dropdownSubjects) data.dropdownSubjects.forEach(sub => { selectOptionsHtml += `<option value="${sub}">${sub}</option>`; });

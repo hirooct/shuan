@@ -90,6 +90,11 @@
       .btn-setting:hover {
         background-color: #334155;
       }
+
+      body.ipad-ui { padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom)); }
+      body.ipad-ui .menu-card { width: min(640px, 92vw); padding: 48px 52px; border-radius: 24px; }
+      body.ipad-ui h1 { font-size: 30px; margin-bottom: 34px; }
+      body.ipad-ui .btn { height: 72px; margin-bottom: 18px; border-radius: 15px; font-size: 20px; }
     </style>
   </head>
   <body>
@@ -104,5 +109,11 @@
       <a href="<?= getScriptUrl(); ?>?p=tsushin" class="btn btn-tsushin">✉️ 学級通信ページ</a>
       <a href="<?= getScriptUrl(); ?>?p=setting" class="btn btn-setting">⚙️ 設定ページ</a>
     </div>
+    <script>
+      (function() {
+        var isiPad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (isiPad || (navigator.maxTouchPoints > 1 && window.innerWidth <= 1400)) document.body.classList.add('ipad-ui');
+      })();
+    </script>
   </body>
 </html>
