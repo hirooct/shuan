@@ -17,14 +17,47 @@ function getWeekPlans(weeks) {
   const lastColumn = sheet.getLastColumn();
   if (lastRow < 10 || lastColumn < 7) return {};
   const values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
+  const fields = typeof getTsushinFieldSettings_ === 'function'
+    ? getTsushinFieldSettings_()
+    : { event: true, timetable: true, dismissal: true, homework: true, lunchDuty: true };
+  const eventMap = fields.event ? getTsushinEventMap_(ss) : {};
   const result = {};
   (weeks || []).forEach(function(week) {
-    result[String(Number(week))] = buildWeekPlanFromValues_(week, values, lastColumn);
+    result[String(Number(week))] = buildWeekPlanFromValues_(week, values, lastColumn, fields, eventMap);
   });
   return result;
 }
 
-function buildWeekPlanFromValues_(week, values, lastColumn) {
+/** 設定シートの行事を、学級通信への掲載可否を反映して日付別にまとめる。 */
+function getTsushinEventMap_(ss) {
+  const settings = ss.getSheetByName('設定');
+  if (!settings || settings.getLastRow() < 3) return {};
+  const count = settings.getLastRow() - 2;
+  const values = settings.getRange(3,6,count,2).getValues();
+  const calendarRows = typeof getCalendarSyncRowMap_ === 'function' ? getCalendarSyncRowMap_(ss) : {};
+  const result = {};
+  values.forEach(function(row, index) {
+    if (row[0] === '' && row[1] === '') return;
+    const dateKey = formatTsushinEventDate_(row[0]);
+    if (!dateKey) return;
+    if (!result[dateKey]) result[dateKey] = [];
+    const calendarMeta = calendarRows[String(index + 3)];
+    if (calendarMeta && calendarMeta.includeInTsushin === false) return;
+    const name = String(row[1] || '').trim();
+    if (name) result[dateKey].push(name);
+  });
+  return result;
+}
+
+function formatTsushinEventDate_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  const match = String(value || '').trim().match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+  return match ? match[1] + '-' + String(match[2]).padStart(2,'0') + '-' + String(match[3]).padStart(2,'0') : '';
+}
+
+function buildWeekPlanFromValues_(week, values, lastColumn, fields, eventMap) {
   // 8行目(インデックス7)から週番号を検索
   let weekStartCol = -1;
   const targetWeek = Number(week); // 数値化して確実に比較
@@ -84,7 +117,12 @@ function buildWeekPlanFromValues_(week, values, lastColumn) {
     result.dates.push(dateStr);
 
     // 行事予定（11行目）。12行目は朝の予定なので混在させない
-    const eventValue = values[10][currentCol] ? String(values[10][currentCol]).trim() : "";
+    const rawEventValue = values[10][currentCol] ? String(values[10][currentCol]).trim() : "";
+    const dateKey = formatTsushinEventDate_(rawDate);
+    const hasManagedEvents = dateKey && Object.prototype.hasOwnProperty.call(eventMap || {}, dateKey);
+    // 管理対象の日付は設定シートから組み直し、非掲載にしたGoogle予定だけを除外する。
+    // 管理対象外の日付は既存の週案表示をそのまま使い、互換性を保つ。
+    const eventValue = hasManagedEvents ? eventMap[dateKey].join('・') : rawEventValue;
     result.event.push(eventValue);
 
     // 教科 (正しい行位置)
@@ -116,9 +154,6 @@ function buildWeekPlanFromValues_(week, values, lastColumn) {
     result.homework.push(homeworkStr);
   }
   // 設定ページで選択した項目だけを学級通信へ渡す。
-  const fields = typeof getTsushinFieldSettings_ === 'function'
-    ? getTsushinFieldSettings_()
-    : { event: true, timetable: true, dismissal: true, homework: true, lunchDuty: true };
   if (!fields.event) result.event = result.event.map(function() { return ''; });
   if (!fields.timetable) ['p1','p2','p3','p4','p5','p6'].forEach(function(key) {
     result[key] = result[key].map(function() { return ''; });

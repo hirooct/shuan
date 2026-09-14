@@ -175,10 +175,11 @@ function getCalendarSyncSheet_(ss) {
   let sheet = ss.getSheetByName(SHUAN_CALENDAR_SYNC_SHEET);
   if (!sheet) {
     sheet = ss.insertSheet(SHUAN_CALENDAR_SYNC_SHEET);
-    sheet.getRange(1,1,1,7).setValues([['同期キー','イベントID','日付','名称','設定行','カレンダーID','最終同期']]);
     sheet.setFrozenRows(1);
     sheet.hideSheet();
   }
+  // v3.6で「学級通信掲載」列を追加。旧版の空欄は掲載扱いにして表示を変えない。
+  sheet.getRange(1,1,1,8).setValues([['同期キー','イベントID','日付','名称','設定行','カレンダーID','最終同期','学級通信掲載']]);
   return sheet;
 }
 
@@ -188,9 +189,21 @@ function writeCalendarSyncEvents_(desired, config) {
   if (!settings) throw new Error('「設定」シートが見つかりません。');
   const syncSheet = getCalendarSyncSheet_(ss);
   const syncRows = syncSheet.getLastRow() > 1
-    ? syncSheet.getRange(2,1,syncSheet.getLastRow()-1,7).getValues() : [];
+    ? syncSheet.getRange(2,1,syncSheet.getLastRow()-1,8).getValues() : [];
   const oldByKey = {};
-  syncRows.forEach(function(row) { if (row[0]) oldByKey[String(row[0])] = row; });
+  const oldPreferenceByEventId = {};
+  syncRows.forEach(function(row) {
+    if (row[0]) oldByKey[String(row[0])] = row;
+    const eventId = String(row[1] || '');
+    if (!eventId) return;
+    const preference = row[7] !== false;
+    if (!Object.prototype.hasOwnProperty.call(oldPreferenceByEventId,eventId)) {
+      oldPreferenceByEventId[eventId] = preference;
+    } else if (oldPreferenceByEventId[eventId] !== preference) {
+      // 同じイベントIDの複数日・繰り返し予定で設定が異なる場合は推測しない。
+      oldPreferenceByEventId[eventId] = null;
+    }
+  });
 
   const neededRows = Math.max(58, settings.getLastRow()-2, desired.length+20);
   if (settings.getMaxRows() < neededRows+2) settings.insertRowsAfter(settings.getMaxRows(), neededRows+2-settings.getMaxRows());
@@ -221,7 +234,10 @@ function writeCalendarSyncEvents_(desired, config) {
     if (old && (oldDate !== item.date || oldTitle !== item.title)) updated++;
     values[index] = [date, item.title];
     occupied[index] = true;
-    nextSyncRows.push([item.key,item.eventId,date,item.title,rowNumber,config.calendarId,new Date()]);
+    // 日付変更で同期キーが変わっても、同じイベントIDなら掲載設定を引き継ぐ。
+    const savedPreference = oldPreferenceByEventId[item.eventId];
+    const includeInTsushin = old ? old[7] !== false : (savedPreference === null || savedPreference === undefined ? true : savedPreference);
+    nextSyncRows.push([item.key,item.eventId,date,item.title,rowNumber,config.calendarId,new Date(),includeInTsushin]);
   });
 
   syncRows.forEach(function(row) {
@@ -237,8 +253,8 @@ function writeCalendarSyncEvents_(desired, config) {
 
   settings.getRange(3,6,neededRows,2).setValues(values);
   settings.getRange(3,6,neededRows,1).setNumberFormat('yyyy/MM/dd');
-  if (syncSheet.getLastRow() > 1) syncSheet.getRange(2,1,syncSheet.getLastRow()-1,7).clearContent();
-  if (nextSyncRows.length) syncSheet.getRange(2,1,nextSyncRows.length,7).setValues(nextSyncRows);
+  if (syncSheet.getLastRow() > 1) syncSheet.getRange(2,1,syncSheet.getLastRow()-1,8).clearContent();
+  if (nextSyncRows.length) syncSheet.getRange(2,1,nextSyncRows.length,8).setValues(nextSyncRows);
   return {added:added, updated:updated, removed:removed};
 }
 
@@ -252,15 +268,47 @@ function formatCalendarSyncDate_(value) {
   return String(value || '').replace(/\//g,'-');
 }
 
-function getCalendarSyncRowMap_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function getCalendarSyncRowMap_(spreadsheet) {
+  const ss = spreadsheet || SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHUAN_CALENDAR_SYNC_SHEET);
   const result = {};
   if (!sheet || sheet.getLastRow() < 2) return result;
-  sheet.getRange(2,1,sheet.getLastRow()-1,7).getValues().forEach(function(row) {
-    if (row[0] && row[4]) result[String(Number(row[4]))] = { calendarId:String(row[5]||''), key:String(row[0]) };
+  sheet.getRange(2,1,sheet.getLastRow()-1,8).getValues().forEach(function(row) {
+    if (row[0] && row[4]) result[String(Number(row[4]))] = {
+      calendarId:String(row[5]||''),
+      key:String(row[0]),
+      includeInTsushin:row[7] !== false
+    };
   });
   return result;
+}
+
+/** Google同期予定の学級通信掲載設定だけを変更する。週案の行事データには触れない。 */
+function setCalendarEventTsushinVisibility(syncKey, includeInTsushin) {
+  const key = String(syncKey || '').trim();
+  if (!key) return { error:'変更するGoogle同期予定が正しくありません。' };
+  const lock = LockService.getDocumentLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHUAN_CALENDAR_SYNC_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { error:'カレンダー同期情報が見つかりません。' };
+    const count = sheet.getLastRow() - 1;
+    const keys = sheet.getRange(2,1,count,1).getDisplayValues();
+    const index = keys.findIndex(function(row) { return String(row[0]) === key; });
+    if (index < 0) return { error:'対象の予定が見つかりません。再同期してからお試しください。' };
+    sheet.getRange(index + 2,8).setValue(includeInTsushin !== false);
+    SpreadsheetApp.flush();
+    return {
+      success:true,
+      includeInTsushin:includeInTsushin !== false,
+      message:includeInTsushin !== false ? '学級通信に掲載します。' : '学級通信には掲載しません。'
+    };
+  } catch (e) {
+    return { error:'学級通信の掲載設定を変更できませんでした: ' + e.message };
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
 }
 
 function updateCalendarSyncTrigger_(enabled) {

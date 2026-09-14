@@ -57,6 +57,10 @@
       .calendar-sync-options label { display:flex; align-items:center; gap:6px; margin:0; }
       .calendar-status { margin-top:10px; padding:9px 11px; border-radius:7px; background:#fff; color:#475569; font-size:12px; line-height:1.5; }
       .source-calendar { display:inline-block; padding:3px 7px; border-radius:999px; background:#dbeafe; color:#1d4ed8; font-size:10px; font-weight:bold; }
+      .tsushin-choice { text-align:center; min-width:92px; }
+      .tsushin-choice label { display:inline-flex; align-items:center; justify-content:center; gap:6px; margin:0; cursor:pointer; color:#334155; }
+      .tsushin-choice input[type="checkbox"] { width:20px; height:20px; padding:0; accent-color:#0d9488; }
+      .tsushin-fixed { color:#64748b; font-size:11px; }
       @media(max-width:800px){.calendar-sync-grid{grid-template-columns:1fr}}
       .feature-panel { border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-top:12px; background:#fff; }
       .feature-panel textarea { width:100%; min-height:100px; box-sizing:border-box; padding:8px; }
@@ -175,7 +179,7 @@
       <p style="font-size:12px;color:#64748b;">週案ページで登録した行事・休日を編集・削除できます。</p>
       <div class="calendar-sync-panel">
         <strong>📅 Googleカレンダー → 週案</strong>
-        <p style="font-size:12px;color:#475569;line-height:1.6;">選択したカレンダーの予定を行事欄へ同期します。手入力の行事は変更しません。</p>
+        <p style="font-size:12px;color:#475569;line-height:1.6;">選択したカレンダーの予定を行事欄へ同期します。手入力の行事は変更しません。同期後、予定ごとに学級通信へ載せるか選べます。</p>
         <div class="calendar-sync-grid">
           <div class="field"><label>同期するGoogleカレンダー</label><select id="calendarSyncId"><option value="">読み込み中...</option></select></div>
           <div class="field"><label>開始日</label><input type="date" id="calendarSyncStart"></div>
@@ -194,8 +198,8 @@
         <div id="calendarSyncStatus" class="calendar-status">同期状態を確認中...</div>
       </div>
       <table id="eventManageTable">
-        <thead><tr><th>種別</th><th>日付</th><th>名称</th><th style="width:130px;">操作</th></tr></thead>
-        <tbody><tr><td colspan="4" class="event-empty">読み込み中...</td></tr></tbody>
+        <thead><tr><th>種別</th><th>日付</th><th>名称</th><th style="width:105px;">学級通信</th><th style="width:130px;">操作</th></tr></thead>
+        <tbody><tr><td colspan="5" class="event-empty">読み込み中...</td></tr></tbody>
       </table>
       <div class="feature-panel">
         <label>一括登録（1行につき「種別,日付,名称」／種別省略時は行事）</label>
@@ -537,30 +541,51 @@
           .withSuccessHandler(function(result) {
             var tbody = document.querySelector('#eventManageTable tbody');
             if (!result || result.error) {
-              tbody.innerHTML = '<tr><td colspan="4" class="event-empty">' +
+              tbody.innerHTML = '<tr><td colspan="5" class="event-empty">' +
                 escapeHtml(result && result.error ? result.error : '読み込めませんでした。') + '</td></tr>';
               return;
             }
             if (!result.entries.length) {
-              tbody.innerHTML = '<tr><td colspan="4" class="event-empty">登録はありません。</td></tr>';
+              tbody.innerHTML = '<tr><td colspan="5" class="event-empty">登録はありません。</td></tr>';
               return;
             }
             tbody.innerHTML = result.entries.map(function(item) {
               var synced = item.source === 'calendar';
-              return '<tr data-type="' + item.type + '" data-row="' + item.row + '">' +
+              return '<tr data-type="' + item.type + '" data-row="' + item.row + '" data-sync-key="' + escapeHtml(item.syncKey || '') + '">' +
                 '<td>' + escapeHtml(item.typeLabel) + (synced ? '<br><span class="source-calendar">Google同期</span>' : '') + '</td>' +
                 '<td><input type="date" class="entry-date" value="' + escapeHtml(item.date) + '" ' + (synced?'disabled':'') + '></td>' +
                 '<td><input type="text" class="entry-name" value="' + escapeHtml(item.name) + '" ' + (synced?'disabled':'') + '></td>' +
+                '<td class="tsushin-choice">' + (synced ? '<label><input type="checkbox" onchange="toggleCalendarTsushin(this)" ' + (item.includeInTsushin!==false?'checked':'') + '>載せる</label>' : '<span class="tsushin-fixed">掲載</span>') + '</td>' +
                 '<td>' + (synced ? '<span style="font-size:11px;color:#64748b">カレンダー側で編集</span>' : '<button type="button" class="btn-small btn-edit" onclick="saveEntry(this)">保存</button> <button type="button" class="btn-small btn-delete" onclick="removeEntry(this)">削除</button>') + '</td>' +
                 '</tr>';
             }).join('');
           })
           .withFailureHandler(function(err) {
             document.querySelector('#eventManageTable tbody').innerHTML =
-              '<tr><td colspan="4" class="event-empty">読み込みに失敗しました: ' +
+              '<tr><td colspan="5" class="event-empty">読み込みに失敗しました: ' +
               escapeHtml(err.message) + '</td></tr>';
           })
           .getConfigEntries();
+      }
+
+      function toggleCalendarTsushin(checkbox) {
+        var tr = checkbox.closest('tr');
+        var previous = !checkbox.checked;
+        checkbox.disabled = true;
+        google.script.run
+          .withSuccessHandler(function(result) {
+            checkbox.disabled = false;
+            if (!result || result.error) {
+              checkbox.checked = previous;
+              alert(result && result.error ? result.error : '掲載設定を変更できませんでした。');
+            }
+          })
+          .withFailureHandler(function(err) {
+            checkbox.disabled = false;
+            checkbox.checked = previous;
+            alert('掲載設定を変更できませんでした: ' + err.message);
+          })
+          .setCalendarEventTsushinVisibility(tr.dataset.syncKey, checkbox.checked);
       }
 
       function collectCalendarSyncConfig() {

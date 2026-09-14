@@ -1,8 +1,8 @@
 /**
  * 配付・初期設定・保守機能
  */
-var SHUAN_APP_VERSION = '3.5.0';
-var SHUAN_APP_UPDATED_AT = '2026-09-13';
+var SHUAN_APP_VERSION = '3.6.0';
+var SHUAN_APP_UPDATED_AT = '2026-09-15';
 var SHUAN_RESET_CONFIRM_TEXT = '初期化する';
 
 function getAppVersionInfo() {
@@ -147,13 +147,16 @@ function getConfigEntries() {
       } else {
         date = String(row[0] || '');
       }
+      const calendarMeta = config.type === 'event' ? calendarRows[String(index + 3)] : null;
       result.push({
         type: config.type,
         typeLabel: config.label,
         row: index + 3,
         date: date,
         name: String(row[1] || ''),
-        source: config.type === 'event' && calendarRows[String(index + 3)] ? 'calendar' : 'manual'
+        source: calendarMeta ? 'calendar' : 'manual',
+        syncKey: calendarMeta ? calendarMeta.key : '',
+        includeInTsushin: calendarMeta ? calendarMeta.includeInTsushin !== false : true
       });
     });
   });
