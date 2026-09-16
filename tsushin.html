@@ -50,8 +50,15 @@
   .printBtn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: bold; font-size: 15px; cursor: pointer; background: var(--theme-color, #1f4d8f); color: white; transition: background 0.2s; font-family: inherit; }
   .printBtn:hover { filter: brightness(0.85); }
   
-  .previewWrap { padding: 28px; overflow: auto; display: flex; justify-content: center; }
-  .paper { width: 210mm; height: 297mm; background: white; padding: var(--tsushin-margin, 10mm); box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+  .previewWrap { padding: 28px; overflow: auto; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+  .layoutStatus { position: sticky; top: 12px; z-index: 30; display: flex; align-items: center; gap: 8px; width: min(210mm, 100%); margin-bottom: 10px; padding: 9px 13px; border: 1px solid #bbf7d0; border-radius: 999px; background: rgba(240,253,244,.96); color: #166534; box-shadow: 0 3px 12px rgba(15,23,42,.08); font: 700 12px/1.3 "BIZ UDGothic", sans-serif; backdrop-filter: blur(8px); }
+  .layoutStatus::before { content: "✓"; display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; background: #16a34a; color: #fff; }
+  .layoutStatus.layout-overflow { border-color: #fecaca; background: rgba(255,241,242,.97); color: #b91c1c; }
+  .layoutStatus.layout-overflow::before { content: "!"; background: #dc2626; }
+  .paper { position: relative; width: 210mm; height: 297mm; background: white; padding: var(--tsushin-margin, 10mm); box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+  .paper::before { content: ""; position: absolute; z-index: 10; inset: var(--tsushin-margin, 10mm); border: 1px dashed rgba(37,99,235,.42); border-radius: 2px; pointer-events: none; }
+  .paper::after { content: "印刷範囲"; position: absolute; z-index: 11; top: calc(var(--tsushin-margin, 10mm) - 16px); right: var(--tsushin-margin, 10mm); padding: 1px 5px; border-radius: 4px 4px 0 0; background: rgba(37,99,235,.72); color: #fff; font: 700 9px/1.4 "BIZ UDGothic", sans-serif; pointer-events: none; }
+  .paper.layout-overflow { outline: 3px solid rgba(220,38,38,.8); outline-offset: 3px; }
   
   .topHeader { border: 2px solid var(--theme-color, #1f3a5f); background: var(--bg-color, #e8eef7); padding: 8px 14px; border-radius: 6px; margin-bottom: 12px; }
   .titleRow { display: flex; justify-content: space-between; align-items: center; }
@@ -90,6 +97,9 @@
   .rangeHeader { display: flex; justify-content: space-between; align-items: center; margin-top: 9px; font-size: 12px; color: #475569; }
   .rangeHeader label { margin: 0; }
   .rangeValue { min-width: 48px; text-align: right; color: #1e3a8a; font-weight: bold; }
+  .ratioLockRow { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 10px; border-radius: 8px; background: #fff; color: #334155; font-size: 12px; font-weight: bold; cursor: pointer; }
+  .ratioLockRow input { width: auto; margin: 0; cursor: pointer; }
+  .ratioLockHint { margin-top: 6px; color: #64748b; font-size: 11px; line-height: 1.45; }
 
   .columnText h2 { margin: 0 0 4px; font-size: 14px; color: var(--theme-color, #1f3a5f); border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; font-family: "BIZ UDGothic", sans-serif; }
   .columnText p { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; color: #222; }
@@ -176,6 +186,9 @@
     .side { display: none; }
     .app { display: block; }
     .previewWrap { padding: 0; overflow: visible; }
+    .layoutStatus { display: none !important; }
+    .paper::before, .paper::after { display: none !important; }
+    .paper.layout-overflow { outline: none !important; }
     .paper, body.ipad-ui[data-ipad-view] .paper { width: 210mm !important; height: 297mm !important; min-height: 0 !important; margin: 0 !important; padding: var(--tsushin-margin, 10mm) !important; box-shadow: none !important; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @page { size: A4 portrait; margin: 0; }
@@ -237,9 +250,11 @@
           <option value="free" selected>自由比率</option>
         </select>
         <div class="rangeHeader"><label for="photoWidthRange">枠の幅</label><span id="photoWidthValue" class="rangeValue">40%</span></div>
-        <input type="range" id="photoWidthRange" min="20" max="80" step="1" value="40">
+        <input type="range" id="photoWidthRange" min="15" max="85" step="1" value="40">
         <div id="photoHeightControl"><div class="rangeHeader"><label for="photoHeightRange">枠の高さ</label><span id="photoHeightValue" class="rangeValue">160px</span></div>
-        <input type="range" id="photoHeightRange" min="60" max="400" step="5" value="160"></div>
+        <input type="range" id="photoHeightRange" min="50" max="450" step="5" value="160">
+        <label class="ratioLockRow"><input type="checkbox" id="photoRatioLock" onchange="togglePhotoRatioLock('main')"> 現在の縦横比を固定する</label>
+        <div class="ratioLockHint">固定すると、枠の幅を変えても写真の縦横比を保ちます。</div></div>
       </div>
       <hr style="border:0; border-top:1px solid #cbd5e1; margin:14px 0;">
       <label for="columnTitle">タイトル</label>
@@ -297,9 +312,11 @@
                 <option value="free" selected>自由比率</option>
               </select>
               <div class="rangeHeader"><label for="upperPhotoWidthRange">枠の幅</label><span id="upperPhotoWidthValue" class="rangeValue">40%</span></div>
-              <input type="range" id="upperPhotoWidthRange" min="20" max="80" step="1" value="40">
+              <input type="range" id="upperPhotoWidthRange" min="15" max="85" step="1" value="40">
               <div id="upperPhotoHeightControl"><div class="rangeHeader"><label for="upperPhotoHeightRange">枠の高さ</label><span id="upperPhotoHeightValue" class="rangeValue">160px</span></div>
-              <input type="range" id="upperPhotoHeightRange" min="60" max="400" step="5" value="160"></div>
+              <input type="range" id="upperPhotoHeightRange" min="50" max="450" step="5" value="160">
+              <label class="ratioLockRow"><input type="checkbox" id="upperPhotoRatioLock" onchange="togglePhotoRatioLock('upper')"> 現在の縦横比を固定する</label>
+              <div class="ratioLockHint">固定すると、枠の幅を変えても写真の縦横比を保ちます。</div></div>
             </div>
           </div>
         </div>
@@ -374,12 +391,13 @@
     <div class="btn-group">
       <button class="saveBtn" onclick="saveToSpreadsheet()">スプレッドシートに一時保存</button>
       <button class="secondaryBtn" onclick="openArchiveModal()">過去の保存を見る</button>
-      <button class="printBtn" onclick="window.print()">印刷・保存</button>
+      <button class="printBtn" onclick="printTsushin()">印刷・保存</button>
     </div>
   </aside>
 
   <main class="previewWrap">
-    <section class="paper">
+    <div id="layoutStatus" class="layoutStatus" role="status" aria-live="polite">A4の印刷範囲内に収まっています</div>
+    <section class="paper" id="tsushinPaper">
       <header class="topHeader">
         <div class="titleRow">
           <div class="mainTitle" id="pMainTitle"></div>
@@ -455,6 +473,7 @@ let upperPhotoChanged = false;
 let photoRemoved = false;
 let upperPhotoRemoved = false;
 let photoProcessing = 0;
+let layoutCheckTimer = null;
 
 function shouldUseTsushinIpadUi() {
   const isiPad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -488,6 +507,7 @@ function photoFrameIds(target) {
     widthValue: upper ? 'upperPhotoWidthValue' : 'photoWidthValue',
     heightValue: upper ? 'upperPhotoHeightValue' : 'photoHeightValue',
     heightControl: upper ? 'upperPhotoHeightControl' : 'photoHeightControl',
+    ratioLock: upper ? 'upperPhotoRatioLock' : 'photoRatioLock',
     box: upper ? 'upperColumnBox' : 'mainMomentBox',
     preview: upper ? 'upperPhotoPreview' : 'photoPreview'
   };
@@ -495,19 +515,34 @@ function photoFrameIds(target) {
 
 function getPhotoFrame(target) {
   const ids = photoFrameIds(target);
-  return {shape:document.getElementById(ids.shape).value, width:document.getElementById(ids.width).value, height:document.getElementById(ids.height).value};
+  const lock = document.getElementById(ids.ratioLock);
+  return {
+    shape:document.getElementById(ids.shape).value,
+    width:document.getElementById(ids.width).value,
+    height:document.getElementById(ids.height).value,
+    ratioLocked:Boolean(lock && lock.checked),
+    ratio:lock && lock.dataset.ratio ? lock.dataset.ratio : ''
+  };
 }
 
-function applyPhotoFrame(target) {
+function clampPhotoHeight(value) {
+  return Math.min(450, Math.max(50, Math.round((Number(value) || 160) / 5) * 5));
+}
+
+function applyPhotoFrame(target, syncLockedHeight) {
   const ids = photoFrameIds(target);
   const shape = document.getElementById(ids.shape).value;
-  const width = Math.min(80, Math.max(20, Number(document.getElementById(ids.width).value) || 40));
-  const height = Math.min(400, Math.max(60, Number(document.getElementById(ids.height).value) || 160));
+  const width = Math.min(85, Math.max(15, Number(document.getElementById(ids.width).value) || 40));
+  const heightInput = document.getElementById(ids.height);
+  let height = clampPhotoHeight(heightInput.value);
+  const lock = document.getElementById(ids.ratioLock);
   const box = document.getElementById(ids.box);
   const preview = document.getElementById(ids.preview);
   document.getElementById(ids.widthValue).textContent = width + '%';
   document.getElementById(ids.heightValue).textContent = height + 'px';
   document.getElementById(ids.heightControl).classList.toggle('hidden-input', shape !== 'free');
+  lock.disabled = shape !== 'free';
+  heightInput.disabled = shape === 'free' && lock.checked;
   if (box) box.style.gridTemplateColumns = `minmax(0, ${width}fr) minmax(0, ${100-width}fr)`;
   if (!preview) return;
   const ratios = {wide:'16 / 9', landscape:'4 / 3', square:'1 / 1', portrait:'3 / 4'};
@@ -518,11 +553,39 @@ function applyPhotoFrame(target) {
     preview.style.aspectRatio = ratios[shape] || '4 / 3';
     preview.style.height = 'auto';
   }
+  if (shape === 'free' && lock.checked && syncLockedHeight) {
+    requestAnimationFrame(() => {
+      const ratio = Math.max(.1, Number(lock.dataset.ratio) || (preview.clientWidth / height) || 1);
+      height = clampPhotoHeight(preview.clientWidth / ratio);
+      heightInput.value = height;
+      document.getElementById(ids.heightValue).textContent = height + 'px';
+      preview.style.height = height + 'px';
+      scheduleLayoutStatus();
+    });
+  }
+  scheduleLayoutStatus();
 }
 
 function changePhotoShape(target) {
+  const ids = photoFrameIds(target);
+  if (document.getElementById(ids.shape).value !== 'free') {
+    document.getElementById(ids.ratioLock).checked = false;
+  }
   applyPhotoFrame(target);
   render();
+}
+
+function togglePhotoRatioLock(target) {
+  const ids = photoFrameIds(target);
+  const lock = document.getElementById(ids.ratioLock);
+  const preview = document.getElementById(ids.preview);
+  const height = Number(document.getElementById(ids.height).value) || 160;
+  if (lock.checked) {
+    lock.dataset.ratio = String(Math.max(.1, (preview ? preview.clientWidth : 0) / height || 1));
+  } else {
+    delete lock.dataset.ratio;
+  }
+  applyPhotoFrame(target, lock.checked);
 }
 
 function toggleUpperInputs() {
@@ -645,20 +708,26 @@ function applyTsushinForm(data) {
   setTsushinChecked(data,'showLunchDuty','showLunchDutyInput');
   setTsushinValue(data,'theme','colorSelect');
   setTsushinValue(data,'pageMarginMm','pageMarginInput');
-  const pt = Object.assign({zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'}, data.photoTransform || {});
-  const upt = Object.assign({zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'}, data.upperPhotoTransform || {});
+  const pt = Object.assign({zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160',ratioLocked:false,ratio:''}, data.photoTransform || {});
+  const upt = Object.assign({zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160',ratioLocked:false,ratio:''}, data.upperPhotoTransform || {});
   if (pt.zoom != null) document.getElementById('zoomRange').value = pt.zoom;
   if (pt.x != null) document.getElementById('xPosRange').value = pt.x;
   if (pt.y != null) document.getElementById('yPosRange').value = pt.y;
   if (pt.shape != null) document.getElementById('photoShapeSelect').value = pt.shape;
   if (pt.width != null) document.getElementById('photoWidthRange').value = pt.width;
   if (pt.height != null) document.getElementById('photoHeightRange').value = pt.height;
+  document.getElementById('photoRatioLock').checked = pt.ratioLocked === true;
+  if (pt.ratio) document.getElementById('photoRatioLock').dataset.ratio = pt.ratio;
+  else delete document.getElementById('photoRatioLock').dataset.ratio;
   if (upt.zoom != null) document.getElementById('upperZoomRange').value = upt.zoom;
   if (upt.x != null) document.getElementById('upperXPosRange').value = upt.x;
   if (upt.y != null) document.getElementById('upperYPosRange').value = upt.y;
   if (upt.shape != null) document.getElementById('upperPhotoShapeSelect').value = upt.shape;
   if (upt.width != null) document.getElementById('upperPhotoWidthRange').value = upt.width;
   if (upt.height != null) document.getElementById('upperPhotoHeightRange').value = upt.height;
+  document.getElementById('upperPhotoRatioLock').checked = upt.ratioLocked === true;
+  if (upt.ratio) document.getElementById('upperPhotoRatioLock').dataset.ratio = upt.ratio;
+  else delete document.getElementById('upperPhotoRatioLock').dataset.ratio;
   changeThemeColor();
   applyTsushinMargin();
   toggleUpperInputs();
@@ -697,6 +766,68 @@ function applyTsushinMargin() {
   const margin = getTsushinMarginMm();
   document.getElementById('pageMarginInput').value = margin;
   document.documentElement.style.setProperty('--tsushin-margin', margin + 'mm');
+  scheduleLayoutStatus();
+}
+
+function measureA4Overflow() {
+  const source = document.getElementById('tsushinPaper');
+  if (!source) return {overflow:false, pixels:0};
+  const paper = source.cloneNode(true);
+  paper.removeAttribute('id');
+  paper.classList.remove('layout-overflow');
+  paper.setAttribute('aria-hidden', 'true');
+  paper.style.setProperty('position', 'fixed', 'important');
+  paper.style.setProperty('left', '-12000px', 'important');
+  paper.style.setProperty('top', '0', 'important');
+  paper.style.setProperty('width', '210mm', 'important');
+  paper.style.setProperty('height', '297mm', 'important');
+  paper.style.setProperty('min-height', '0', 'important');
+  paper.style.setProperty('padding', getTsushinMarginMm() + 'mm', 'important');
+  paper.style.setProperty('box-shadow', 'none', 'important');
+  paper.style.setProperty('visibility', 'hidden', 'important');
+  document.body.appendChild(paper);
+
+  const paperRect = paper.getBoundingClientRect();
+  const styles = getComputedStyle(paper);
+  const limitRight = paperRect.right - parseFloat(styles.paddingRight);
+  const limitBottom = paperRect.bottom - parseFloat(styles.paddingBottom);
+  let excess = 0;
+  paper.querySelectorAll('*').forEach(element => {
+    if (element.matches('.photoSpace img')) return;
+    const rect = element.getBoundingClientRect();
+    if (!rect.width && !rect.height) return;
+    excess = Math.max(excess, rect.right - limitRight, rect.bottom - limitBottom);
+  });
+  excess = Math.max(excess, paper.scrollWidth - paper.clientWidth, paper.scrollHeight - paper.clientHeight);
+  paper.remove();
+  return {overflow:excess > 1, pixels:Math.max(0, excess)};
+}
+
+function updateLayoutStatus() {
+  const result = measureA4Overflow();
+  const paper = document.getElementById('tsushinPaper');
+  const status = document.getElementById('layoutStatus');
+  if (!paper || !status) return result;
+  paper.classList.toggle('layout-overflow', result.overflow);
+  status.classList.toggle('layout-overflow', result.overflow);
+  if (result.overflow) {
+    const mm = Math.max(1, Math.ceil(result.pixels * 25.4 / 96));
+    status.textContent = `A4から約${mm}mmはみ出しています。文章・写真サイズ・余白を調整してください`;
+  } else {
+    status.textContent = 'A4の印刷範囲内に収まっています';
+  }
+  return result;
+}
+
+function scheduleLayoutStatus() {
+  clearTimeout(layoutCheckTimer);
+  layoutCheckTimer = setTimeout(updateLayoutStatus, 80);
+}
+
+function printTsushin() {
+  const result = updateLayoutStatus();
+  if (result && result.overflow && !confirm('内容がA4の印刷範囲からはみ出しています。\nこのまま印刷画面を開きますか？')) return;
+  window.print();
 }
 
 function initWeekSelects() {
@@ -952,6 +1083,7 @@ function render() {
 
   updateQRCodes();
   setTimeout(adjustEventFontSize, 50);
+  scheduleLayoutStatus();
 }
 
 function compressPhoto(file) {
@@ -1103,8 +1235,10 @@ function loadArchiveItem(id) {
 ["upperZoomRange", "upperXPosRange", "upperYPosRange"].forEach(id => {
   document.getElementById(id).addEventListener("input", updateUpperPhotoTransform);
 });
-["photoWidthRange", "photoHeightRange"].forEach(id => document.getElementById(id).addEventListener('input', () => applyPhotoFrame('main')));
-["upperPhotoWidthRange", "upperPhotoHeightRange"].forEach(id => document.getElementById(id).addEventListener('input', () => applyPhotoFrame('upper')));
+document.getElementById('photoWidthRange').addEventListener('input', () => applyPhotoFrame('main', true));
+document.getElementById('photoHeightRange').addEventListener('input', () => applyPhotoFrame('main'));
+document.getElementById('upperPhotoWidthRange').addEventListener('input', () => applyPhotoFrame('upper', true));
+document.getElementById('upperPhotoHeightRange').addEventListener('input', () => applyPhotoFrame('upper'));
 
 // 各種設定項目の入力変更監視リスト（追加項目も追記）
 [
@@ -1129,8 +1263,9 @@ document.getElementById('pageMarginInput').addEventListener('change', function()
   applyTsushinMargin();
   render();
 });
-window.addEventListener('resize', adjustEventFontSize);
-window.addEventListener('resize', applyTsushinIpadMode);
+window.addEventListener('resize', () => { adjustEventFontSize(); applyTsushinIpadMode(); scheduleLayoutStatus(); });
+window.addEventListener('beforeprint', updateLayoutStatus);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleLayoutStatus);
 
 applyTsushinIpadMode();
 initWeekSelects();
