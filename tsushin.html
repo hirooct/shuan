@@ -149,7 +149,10 @@
   .archiveClose { border: 0; background: #e2e8f0; border-radius: 999px; width: 34px; height: 34px; cursor: pointer; font-size: 18px; }
   .archiveItem { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #dbe4ef; border-radius: 10px; margin-bottom: 8px; }
   .archiveMeta { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .archiveActions { display: flex; gap: 7px; align-items: center; }
   .archiveLoadBtn { border: 0; border-radius: 8px; padding: 9px 13px; background: #1e3a8a; color: #fff; cursor: pointer; font-weight: bold; }
+  .archiveDeleteBtn { border: 1px solid #fecaca; border-radius: 8px; padding: 9px 13px; background: #fff1f2; color: #be123c; cursor: pointer; font-weight: bold; }
+  .archiveLoadBtn:disabled, .archiveDeleteBtn:disabled { opacity: .55; cursor: wait; }
   .ipadViewBar { display: none; }
 
   body.ipad-ui { padding-bottom: env(safe-area-inset-bottom); }
@@ -1029,7 +1032,28 @@ function escapeArchiveText(value) {
 function renderArchiveList(items) {
   const list = document.getElementById('archiveList');
   if (!items || !items.length) { list.textContent = 'まだ保存履歴はありません。学級通信を保存すると、ここへ自動追加されます。'; return; }
-  list.innerHTML = items.map(item => `<div class="archiveItem"><div><strong>${escapeArchiveText(item.issue || '号数未設定')}　${escapeArchiveText(item.title)}</strong><div class="archiveMeta">保存：${escapeArchiveText(item.savedAt)} ／ 発行日：${escapeArchiveText(item.issueDate)} ／ 第${escapeArchiveText(item.upperWeek)}週・第${escapeArchiveText(item.lowerWeek)}週</div></div><button class="archiveLoadBtn" onclick="loadArchiveItem('${escapeArchiveText(item.id)}')">表示</button></div>`).join('');
+  list.innerHTML = items.map(item => `<div class="archiveItem"><div><strong>${escapeArchiveText(item.issue || '号数未設定')}　${escapeArchiveText(item.title)}</strong><div class="archiveMeta">保存：${escapeArchiveText(item.savedAt)} ／ 発行日：${escapeArchiveText(item.issueDate)} ／ 第${escapeArchiveText(item.upperWeek)}週・第${escapeArchiveText(item.lowerWeek)}週</div></div><div class="archiveActions"><button class="archiveLoadBtn" onclick="loadArchiveItem('${escapeArchiveText(item.id)}')">表示</button><button class="archiveDeleteBtn" data-id="${escapeArchiveText(item.id)}" data-issue="${escapeArchiveText(item.issue || '号数未設定')}" onclick="deleteArchiveItem(this)">削除</button></div></div>`).join('');
+}
+
+function deleteArchiveItem(button) {
+  const issue = button.dataset.issue || '号数未設定';
+  if (!confirm(`「${issue}」の過去の保存を削除しますか？\nこの操作は元に戻せません。`)) return;
+  button.disabled = true;
+  google.script.run.withSuccessHandler(result => {
+    if (!result || result.error) {
+      button.disabled = false;
+      alert(result && result.error ? result.error : '削除できませんでした。');
+      return;
+    }
+    const list = document.getElementById('archiveList');
+    list.textContent = '一覧を更新中...';
+    google.script.run.withSuccessHandler(renderArchiveList).withFailureHandler(error => {
+      list.textContent = '履歴を読み込めませんでした：' + (error && error.message ? error.message : error);
+    }).listTsushinArchives(50);
+  }).withFailureHandler(error => {
+    button.disabled = false;
+    alert('削除できませんでした：' + (error && error.message ? error.message : error));
+  }).deleteTsushinArchive(button.dataset.id);
 }
 
 function loadArchiveItem(id) {

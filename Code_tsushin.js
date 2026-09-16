@@ -245,8 +245,14 @@ function saveTsushinData(data) {
       normalized.photoFileId,normalized.upperPhotoFileId,2].map(function(value){return [value];});
     sheet.getRange('B1:B33').setValues(values);
     SpreadsheetApp.flush();
-    appendTsushinArchive_(normalized);
-    return {ok:true, message:"学級通信を保存し、過去の保存にも追加しました。"};
+    const archiveResult = upsertTsushinArchive_(normalized);
+    return {
+      ok:true,
+      archiveUpdated:archiveResult.updated,
+      message:archiveResult.updated
+        ? "学級通信を保存し、同じ号数の過去の保存を更新しました。"
+        : "学級通信を保存し、過去の保存にも追加しました。"
+    };
   } finally {
     lock.releaseLock();
   }
@@ -311,12 +317,35 @@ function getTsushinArchiveSheet_() {
   return sheet;
 }
 
-function appendTsushinArchive_(form) {
+function normalizeTsushinIssue_(issue) {
+  return String(issue || '').trim().replace(/[\s\u3000]+/g, ' ');
+}
+
+/** 同じ号数があれば最新の1件を更新し、なければ新規追加する。 */
+function upsertTsushinArchive_(form) {
   const sheet = getTsushinArchiveSheet_();
-  const id = Utilities.getUuid();
   const plans = getWeekPlans([Number(form.upperWeek), Number(form.lowerWeek)]);
   const payload = {version:2, form:form, plans:plans};
-  sheet.appendRow([id,new Date(),form.issue||'',form.issueDate||'',form.mainTitle||'',form.upperWeek||'',form.lowerWeek||'',JSON.stringify(payload)]);
+  const issueKey = normalizeTsushinIssue_(form.issue);
+  let targetRow = 0;
+  let id = Utilities.getUuid();
+
+  // 号数が空欄の保存同士は同一号とみなさず、誤上書きを防ぐ。
+  if (issueKey && sheet.getLastRow() >= 2) {
+    const archiveRows = sheet.getRange(2,1,sheet.getLastRow()-1,3).getValues();
+    for (let i=archiveRows.length-1; i>=0; i--) {
+      if (normalizeTsushinIssue_(archiveRows[i][2]) === issueKey) {
+        targetRow = i + 2;
+        id = String(archiveRows[i][0] || id);
+        break;
+      }
+    }
+  }
+
+  const row = [id,new Date(),form.issue||'',form.issueDate||'',form.mainTitle||'',form.upperWeek||'',form.lowerWeek||'',JSON.stringify(payload)];
+  if (targetRow) sheet.getRange(targetRow,1,1,8).setValues([row]);
+  else sheet.appendRow(row);
+  return {id:id, updated:Boolean(targetRow)};
 }
 
 function listTsushinArchives(limit) {
@@ -347,6 +376,32 @@ function loadTsushinArchive(archiveId) {
     }
   }
   throw new Error('指定した保存履歴が見つかりません。');
+}
+
+/** アーカイブだけを削除する。現在編集中の通信データと写真ファイルは残す。 */
+function deleteTsushinArchive(archiveId) {
+  const id = String(archiveId || '').trim();
+  if (!id) return {error:'削除する保存データが正しくありません。'};
+  const lock = LockService.getDocumentLock();
+  try {
+    lock.waitLock(10000);
+    const sheet = getTsushinArchiveSheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return {error:'保存履歴がありません。'};
+    const ids = sheet.getRange(2,1,lastRow-1,1).getDisplayValues();
+    for (let i=ids.length-1; i>=0; i--) {
+      if (String(ids[i][0]) === id) {
+        sheet.deleteRow(i + 2);
+        SpreadsheetApp.flush();
+        return {success:true, message:'過去の保存を削除しました。'};
+      }
+    }
+    return {error:'指定した保存履歴が見つかりません。'};
+  } catch (e) {
+    return {error:'過去の保存を削除できませんでした: ' + e.message};
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
 }
 
 //現在の入力データからPDFを生成し、各自のGoogleドライブに安全に保存する
