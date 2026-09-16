@@ -36,6 +36,9 @@
       padding: 15px;
       box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
     }
+    .weeks-grid { display: grid; grid-template-columns: minmax(0, 210mm); justify-content: center; gap: 18px; width: 100%; }
+    .weeks-grid.two-weeks { grid-template-columns: repeat(2, 210mm); justify-content: start; width: max-content; padding: 0 18px; margin: 0 auto 40px; }
+    .weeks-grid.two-weeks .print-container { margin-left: 0; margin-right: 0; }
     
     /* 操作バー */
     .no-print-bar {
@@ -127,7 +130,8 @@
        ========================================================== */
     @media print {
       .no-print-bar, .modal-overlay { display: none !important; }
-      body { background: white; margin: 0; padding: 0; height: 100vh; overflow: hidden !important; font-family: 'BIZ UDPGothic', sans-serif !important; }
+      html, body { background: white; margin: 0; padding: 0; height: auto; overflow: visible !important; font-family: 'BIZ UDPGothic', sans-serif !important; }
+      .weeks-grid, .weeks-grid.two-weeks { display: block !important; width: auto !important; margin: 0 !important; padding: 0 !important; }
       
       /* 🌟 固定値(255mm)を廃止。用紙の全高（100vh）に合わせてきれいに収め、周囲に適切な余白を確保します */
       .print-container { 
@@ -139,7 +143,10 @@
         overflow: hidden !important; 
         display: flex !important;
         flex-direction: column !important;
+        break-after: page;
+        page-break-after: always;
       }
+      .print-container:last-child { break-after: auto; page-break-after: auto; }
       
       /* 🌟 テーブル要素が縦幅いっぱいに引き伸ばされるように指定 */
       .main-table {
@@ -185,17 +192,12 @@
     body.ipad-ui .ipad-day-button { flex: 1 0 76px; min-height: 50px; border: 1px solid #64748b; border-radius: 10px; background: #334155; color: #fff; font-family: inherit; font-weight: bold; }
     body.ipad-ui .ipad-day-button small { display: block; margin-top: 2px; font-size: 10px; font-weight: normal; color: #cbd5e1; }
     body.ipad-ui .ipad-day-button.active { background: #2563eb; border-color: #93c5fd; box-shadow: inset 0 0 0 2px #bfdbfe; }
-    body.ipad-ui .print-container { width: 100%; max-width: none; min-width: 0; margin: 0; padding: 12px; box-shadow: none; }
+    body.ipad-ui .weeks-grid, body.ipad-ui .weeks-grid.two-weeks { display: block; width: 100%; margin: 0; padding: 0; }
+    body.ipad-ui .print-container { width: 100%; max-width: none; min-width: 0; margin: 0 0 14px; padding: 12px; box-shadow: none; border-bottom: 5px solid #cbd5e1; }
     body.ipad-ui .header-table { margin: 4px 0 10px; }
     body.ipad-ui .main-table { table-layout: fixed; }
-    body.ipad-ui .main-table tr > :not(:first-child) { display: none; }
-    body.ipad-ui[data-ipad-day="0"] .main-table tr > :nth-child(2),
-    body.ipad-ui[data-ipad-day="1"] .main-table tr > :nth-child(3),
-    body.ipad-ui[data-ipad-day="2"] .main-table tr > :nth-child(4),
-    body.ipad-ui[data-ipad-day="3"] .main-table tr > :nth-child(5),
-    body.ipad-ui[data-ipad-day="4"] .main-table tr > :nth-child(6),
-    body.ipad-ui[data-ipad-day="5"] .main-table tr > :nth-child(7),
-    body.ipad-ui[data-ipad-day="6"] .main-table tr > :nth-child(8) { display: table-cell; width: auto; }
+    body.ipad-ui .main-table .day-col { display: none; }
+    body.ipad-ui .main-table .day-col.ipad-active-day { display: table-cell; width: auto; }
     body.ipad-ui .col-label { width: 78px; min-width: 78px; font-size: 14px; vertical-align: middle; }
     body.ipad-ui .day-header { height: 48px; font-size: 15px; }
     body.ipad-ui .period-row td { height: 116px; }
@@ -209,7 +211,7 @@
     body.ipad-ui .modal-field input, body.ipad-ui .modal-field select, body.ipad-ui .modal-buttons .btn { min-height: 44px; font-size: 16px; }
 
     @media print {
-      body.ipad-ui .main-table tr > :not(:first-child) { display: table-cell !important; }
+      body.ipad-ui .main-table .day-col { display: table-cell !important; }
       body.ipad-ui .main-table th, body.ipad-ui .main-table td,
       body.ipad-ui .col-label, body.ipad-ui .day-header { font-size: 8.5px !important; }
       body.ipad-ui .subject-input, body.ipad-ui .edit-trigger { font-size: 8.5px !important; padding: 1px 2px !important; line-height: 1.15 !important; }
@@ -227,6 +229,10 @@
       <script>for(let i=1;i<=52;i++) document.write(`<option value="${i}">第 ${i} 週</option>`);</script>
     </select>
     <button class="btn-nav" onclick="changeWeek(1)">▶</button>
+    <select id="weekDisplayCount" onchange="changeWeekDisplay(this.value)" aria-label="表示する週数">
+      <option value="1">1週間</option>
+      <option value="2">2週間</option>
+    </select>
     
     <button class="btn btn-tools ipad-only" id="ipadToolsToggle" onclick="toggleIpadTools()">☰ 操作</button>
     <button class="btn btn-load-default ipad-extra" onclick="applyDefaultTimetable()">📅 基本時間割読込</button>
@@ -291,30 +297,15 @@
 
   <div id="loading">データを読み込み中...</div>
 
-  <div class="print-container" id="contentArea" style="display:none;">
-    <table class="header-table">
-      <tr>
-        <td style="width:25%; font-size:10px; font-weight:bold;" id="lblYear"></td>
-        <td class="header-center">週 案</td>
-        <td style="width:35%; text-align:right; font-size:10px; color:#475569;" id="lblDuration"></td>
-      </tr>
-    </table>
-    <table class="main-table" oninput="setDirty(true)">
-      <thead>
-        <tr id="headerRow">
-          <th class="col-label">校時</th>
-          <th class="day-header" id="th0"></th><th class="day-header" id="th1"></th><th class="day-header" id="th2"></th>
-          <th class="day-header" id="th3"></th><th class="day-header" id="th4"></th><th class="day-header" id="th5"></th><th class="day-header" id="th6"></th>
-        </tr>
-      </thead>
-      <tbody id="timetableBody"></tbody>
-    </table>
+  <div id="contentArea" style="display:none;">
+    <div class="weeks-grid" id="weeksContainer"></div>
   </div>
 
   <script>
     let globalConfigList = [];
-    let globalColIndices = [];
     let currentLoadedWeek = 1;
+    let displayedWeeks = [];
+    let displayWeekCount = localStorage.getItem('shuan_week_display_count') === '2' ? 2 : 1;
     let globalSlideUrl = ""; 
     
     let isDirty = false;
@@ -344,6 +335,9 @@
       document.querySelectorAll('.ipad-day-button').forEach(function(button) {
         button.classList.toggle('active', Number(button.dataset.day) === ipadDay);
       });
+      document.querySelectorAll('.day-col').forEach(function(cell) {
+        cell.classList.toggle('ipad-active-day', Number(cell.dataset.localDay) === ipadDay);
+      });
       if (scrollToTop !== false) {
         const area = document.getElementById('contentArea');
         if (area) area.scrollIntoView({behavior:'smooth', block:'start'});
@@ -352,10 +346,27 @@
 
     function updateIpadDayLabels() {
       document.querySelectorAll('.ipad-day-button').forEach(function(button) {
-        const header = document.getElementById('th' + button.dataset.day);
         const small = button.querySelector('small');
-        if (header && small) small.textContent = header.textContent.replace(/\s+/g, ' ').trim();
+        if (!small) return;
+        const day = Number(button.dataset.day);
+        small.textContent = displayedWeeks.map(function(week) {
+          return String((week.days || [])[day] || '').replace(/\([^)]*\)/g,'');
+        }).filter(Boolean).join('・');
       });
+    }
+
+    function changeWeekDisplay(value) {
+      const nextCount = Number(value) === 2 ? 2 : 1;
+      if (nextCount === displayWeekCount) return;
+      if (!confirmDiscardChanges()) {
+        document.getElementById('weekDisplayCount').value = String(displayWeekCount);
+        return;
+      }
+      displayWeekCount = nextCount;
+      localStorage.setItem('shuan_week_display_count',String(displayWeekCount));
+      if (displayWeekCount === 2 && currentLoadedWeek > 51) currentLoadedWeek = 51;
+      document.getElementById('weekSelect').value = String(currentLoadedWeek);
+      loadWeeklyData(currentLoadedWeek);
     }
 
     function setDirty(dirty) {
@@ -443,7 +454,8 @@
     function changeWeek(offset) {
       let nextWeek = parseInt(currentLoadedWeek, 10) + offset;
       if (nextWeek < 1) nextWeek = 1;
-      if (nextWeek > 52) nextWeek = 52;
+      const maxStartWeek = displayWeekCount === 2 ? 51 : 52;
+      if (nextWeek > maxStartWeek) nextWeek = maxStartWeek;
       
       if (!confirmDiscardChanges()) {
         document.getElementById('weekSelect').value = currentLoadedWeek;
@@ -459,7 +471,12 @@
         document.getElementById('weekSelect').value = currentLoadedWeek;
         return;
       }
-      loadWeeklyData(weekNum);
+      let target = Number(weekNum) || 1;
+      if (displayWeekCount === 2 && target > 51) {
+        target = 51;
+        document.getElementById('weekSelect').value = '51';
+      }
+      loadWeeklyData(target);
     }
 
     function openRegModal() {
@@ -539,6 +556,7 @@
 
     window.onload = function() {
       applyIpadMode();
+      document.getElementById('weekDisplayCount').value = String(displayWeekCount);
       google.script.run.withSuccessHandler(function(initial) {
         productivitySettings = initial.productivity || productivitySettings;
         productivitySettings.defaultTimetable = initial.defaultTimetable || {};
@@ -549,15 +567,17 @@
           btn.className = "btn btn-open-slide ipad-extra";
           btn.style = "";
         }
-        document.getElementById('weekSelect').value = initial.weekNum;
-        loadWeeklyData(initial.weekNum, { weekly: initial.weekly, draft: initial.draft });
+        currentLoadedWeek = displayWeekCount === 2 && Number(initial.weekNum) > 51 ? 51 : Number(initial.weekNum);
+        document.getElementById('weekSelect').value = currentLoadedWeek;
+        if (displayWeekCount === 1) loadWeeklyData(currentLoadedWeek, {weeks:[initial.weekly], draft:initial.draft});
+        else loadWeeklyData(currentLoadedWeek);
       }).withFailureHandler(function(err) {
         document.getElementById('loading').innerText = '読み込みに失敗しました: ' + (err.message || err);
       }).getWeeklyPageInitialData();
       // ツールバーボタンを押しても、直前に選んだ週案の入力欄を見失わないようにする。
       document.addEventListener('focusin', function(event) {
         const el = event.target;
-        if (el && el.closest && el.closest('#timetableBody') && /^(INPUT|TEXTAREA)$/.test(el.tagName) && !el.readOnly && !el.disabled) {
+        if (el && el.closest && el.closest('.week-panel') && /^(INPUT|TEXTAREA)$/.test(el.tagName) && !el.readOnly && !el.disabled) {
           lastEditableElement = el;
         }
       });
@@ -580,135 +600,115 @@
       window.addEventListener('resize', applyIpadMode);
     };
 
-    function loadWeeklyData(weekNum, prepared) {
-      currentLoadedWeek = parseInt(weekNum, 10);
-      document.getElementById('loading').style.display = 'block';
-      document.getElementById('contentArea').style.display = 'none';
-
-      const renderLoadedWeek = function(payload) {
-        const data = payload.weekly || payload;
-        if(data.error) { alert(data.error); return; }
-        document.getElementById('loading').style.display = 'none';
-        
-        const headerParts = [data.year + "年度", data.schoolName, data.className, data.teacherName].filter(Boolean);
-        document.getElementById('lblYear').innerText = headerParts.join("　");
-        document.getElementById('lblDuration').innerText = "期間: " + data.startDate + " 〜 " + data.endDate + " (第 " + data.weekNum + " 週)";
-        
-        globalConfigList = data.colorSubjects || [];
-        globalColIndices = data.colIndices;
-
-        const hFlags = data.holidayRow.map(c => c.includes("休") ? " holiday-column" : "");
-        for(let i=0;i<7;i++) {
-          document.getElementById('th'+i).innerHTML = data.days[i];
-          document.getElementById('th'+i).className = "day-header" + hFlags[i];
-        }
-        updateIpadDayLabels();
-
-        let selectOptionsHtml = '<option value=""></option>';
-        if (data.dropdownSubjects) data.dropdownSubjects.forEach(sub => { selectOptionsHtml += `<option value="${sub}">${sub}</option>`; });
-        let leavingOptionsHtml = '<option value=""></option>';
-        if (data.leavingTimes) data.leavingTimes.forEach(time => { leavingOptionsHtml += `<option value="${time}">${time}</option>`; });
-
-        const t = data.timetable;
-        let html = "";
-        const getDisabledAttr = (idx) => hFlags[idx] ? "disabled readonly" : "";
-
-        html += `<tr class="row-short"><td class="col-label">行事</td>`;
-        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><input type="text" id="event-${i}" class="edit-trigger center-input" value="${t.event[i]}" title="行事の追加は「休日・行事登録」から行います" readonly></td>`;
-        html += `</tr>`;
-
-        html += `<tr class="row-short"><td class="col-label">朝</td>`;
-        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><input type="text" id="morning-${i}" class="edit-trigger center-input" value="${t.morning[i]}" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></td>`;
-        html += `</tr>`;
-
-        const periods = [
-          { label: "1", id: "p1", data: t.p1, isBreak: false },
-          { label: "2", id: "p2", data: t.p2, isBreak: false },
-          { label: "中間", id: "rest", data: t.rest, isBreak: true },
-          { label: "3", id: "p3", data: t.p3, isBreak: false },
-          { label: "4", id: "p4", data: t.p4, isBreak: false },
-          { label: "給食", id: "lunch", data: t.lunch, isBreak: true },
-          { label: "そうじ", id: "clean", data: t.clean, isBreak: true },
-          { label: "昼休み", id: "recess", data: t.recess, isBreak: true },
-          { label: "5", id: "p5", data: t.p5, isBreak: false },
-          { label: "6", id: "p6", data: t.p6, isBreak: false }
-        ];
-
-        periods.forEach(p => {
-          if(p.isBreak) {
-            html += `<tr class="row-break"><td class="col-label">${p.label}</td>`;
-            for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><input type="text" id="${p.id}-${i}" class="edit-trigger center-input" value="${p.data[i]}" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></td>`;
-            html += `</tr>`;
-          } else {
-            html += `<tr class="period-row"><td class="col-label">${p.label}</td>`;
-            for(let i=0;i<7;i++) {
-              const cellData = p.data[i];
-              const colorClass = getDynamicSubjectClass(cellData.subject);
-              const disabledStr = getDisabledAttr(i);
-              html += `<td class="${hFlags[i]}">
-                <div class="cell-box">
-                  <div class="subject-combo-container ${colorClass}">
-                    <input type="text" id="${p.id}-sub-${i}" class="subject-input" value="${cellData.subject}" oninput="updateSubjectColor(this); adjustFontSize(this);" placeholder="" ${disabledStr}>
-                    <select class="subject-select" onchange="onSubjectSelectChange(this)" ${disabledStr}>${selectOptionsHtml}</select>
-                  </div>
-                  <textarea id="${p.id}-cont-${i}" class="edit-trigger" oninput="adjustFontSize(this)" ${disabledStr}>${cellData.content}</textarea>
-                </div>
-              </td>`;
-            }
-            html += `</tr>`;
-          }
-        });
-
-        html += `<tr class="row-short"><td class="col-label">下校</td>`;
-        for(let i=0;i<7;i++) {
-          const disabledStr = getDisabledAttr(i);
-          html += `<td class="${hFlags[i]}">
-            <div class="subject-combo-container" style="border-bottom:none; height:100%;">
-              <input type="text" id="leaving-${i}" class="subject-input edit-trigger center-input" value="${t.leaving[i]}" oninput="adjustFontSize(this)" ${disabledStr} style="font-weight:bold; padding:4px 2px;">
-              <select class="subject-select" onchange="onSubjectSelectChange(this)" ${disabledStr}>${leavingOptionsHtml}</select>
-            </div>
-          </td>`;
-        }
-        html += `</tr>`;
-
-        html += `<tr class="row-homework"><td class="col-label">宿題</td>`;
-        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><textarea id="homework-${i}" class="edit-trigger left-input" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></textarea></td>`;
-        html += `</tr>`;
-
-        html += `<tr class="row-memo"><td class="col-label">備考</td>`;
-        for(let i=0;i<7;i++) html += `<td class="${hFlags[i]}"><textarea id="memo-${i}" class="edit-trigger left-input" oninput="adjustFontSize(this)" ${getDisabledAttr(i)}></textarea></td>`;
-        html += `</tr>`;
-        
-        document.getElementById('timetableBody').innerHTML = html;
-        document.getElementById('contentArea').style.display = 'block';
-        for(let i=0;i<7;i++){
-          document.getElementById(`homework-${i}`).value = t.homework[i];
-          document.getElementById(`memo-${i}`).value = t.memo[i];
-        }
-        triggerAllFontAdjustments();
-        setDirty(false); 
-        offerDraftRestore(currentLoadedWeek, payload.draft);
-      };
-      if (prepared) renderLoadedWeek(prepared);
-      else google.script.run.withSuccessHandler(renderLoadedWeek).withFailureHandler(function(err){
-        document.getElementById('loading').innerText='読み込みに失敗しました: '+(err.message||err);
-      }).getWeeklyPageData(weekNum);
+    function escapeWeekly(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+      });
     }
 
-    function collectWeeklyFormData() {
-      const single = id => Array.from({length:7},(_,i) => document.getElementById(id+'-'+i).value);
-      const split = id => Array.from({length:7},(_,i) => ({subject:document.getElementById(id+'-sub-'+i).value,content:document.getElementById(id+'-cont-'+i).value}));
+    function weekPrefix(weekNum) { return 'w' + String(weekNum); }
+
+    function buildWeekPanel(data) {
+      const prefix = weekPrefix(data.weekNum);
+      const hFlags = (data.holidayRow || []).map(function(c){return String(c).includes('休') ? 'holiday-column' : '';});
+      let subjectOptions = '<option value=""></option>';
+      (data.dropdownSubjects || []).forEach(function(sub){subjectOptions += `<option value="${escapeWeekly(sub)}">${escapeWeekly(sub)}</option>`;});
+      let leavingOptions = '<option value=""></option>';
+      (data.leavingTimes || []).forEach(function(time){leavingOptions += `<option value="${escapeWeekly(time)}">${escapeWeekly(time)}</option>`;});
+      const t = data.timetable;
+      const dayAttrs = function(i) { return `class="day-col ${hFlags[i]}" data-local-day="${i}"`; };
+      const disabled = function(i) { return hFlags[i] ? 'disabled readonly' : ''; };
+      let body = `<tr class="row-short"><td class="col-label">行事</td>`;
+      for(let i=0;i<7;i++) body += `<td ${dayAttrs(i)}><input type="text" id="${prefix}-event-${i}" class="edit-trigger center-input" value="${escapeWeekly(t.event[i])}" title="行事の追加は「休日・行事登録」から行います" readonly></td>`;
+      body += '</tr><tr class="row-short"><td class="col-label">朝</td>';
+      for(let i=0;i<7;i++) body += `<td ${dayAttrs(i)}><input type="text" id="${prefix}-morning-${i}" class="edit-trigger center-input" value="${escapeWeekly(t.morning[i])}" oninput="adjustFontSize(this)" ${disabled(i)}></td>`;
+      body += '</tr>';
+      const periods = [
+        {label:'1',id:'p1',data:t.p1},{label:'2',id:'p2',data:t.p2},
+        {label:'中間',id:'rest',data:t.rest,breakRow:true},{label:'3',id:'p3',data:t.p3},
+        {label:'4',id:'p4',data:t.p4},{label:'給食',id:'lunch',data:t.lunch,breakRow:true},
+        {label:'そうじ',id:'clean',data:t.clean,breakRow:true},{label:'昼休み',id:'recess',data:t.recess,breakRow:true},
+        {label:'5',id:'p5',data:t.p5},{label:'6',id:'p6',data:t.p6}
+      ];
+      periods.forEach(function(period) {
+        body += `<tr class="${period.breakRow?'row-break':'period-row'}"><td class="col-label">${period.label}</td>`;
+        for(let i=0;i<7;i++) {
+          if (period.breakRow) {
+            body += `<td ${dayAttrs(i)}><input type="text" id="${prefix}-${period.id}-${i}" class="edit-trigger center-input" value="${escapeWeekly(period.data[i])}" oninput="adjustFontSize(this)" ${disabled(i)}></td>`;
+          } else {
+            const cell = period.data[i] || {subject:'',content:''};
+            body += `<td ${dayAttrs(i)}><div class="cell-box"><div class="subject-combo-container ${getDynamicSubjectClass(cell.subject)}"><input type="text" id="${prefix}-${period.id}-sub-${i}" class="subject-input" value="${escapeWeekly(cell.subject)}" oninput="updateSubjectColor(this);adjustFontSize(this)" ${disabled(i)}><select class="subject-select" onchange="onSubjectSelectChange(this)" ${disabled(i)}>${subjectOptions}</select></div><textarea id="${prefix}-${period.id}-cont-${i}" class="edit-trigger" oninput="adjustFontSize(this)" ${disabled(i)}></textarea></div></td>`;
+          }
+        }
+        body += '</tr>';
+      });
+      body += '<tr class="row-short"><td class="col-label">下校</td>';
+      for(let i=0;i<7;i++) body += `<td ${dayAttrs(i)}><div class="subject-combo-container" style="border-bottom:none;height:100%;"><input type="text" id="${prefix}-leaving-${i}" class="subject-input edit-trigger center-input" value="${escapeWeekly(t.leaving[i])}" oninput="adjustFontSize(this)" ${disabled(i)} style="font-weight:bold;padding:4px 2px;"><select class="subject-select" onchange="onSubjectSelectChange(this)" ${disabled(i)}>${leavingOptions}</select></div></td>`;
+      body += '</tr><tr class="row-homework"><td class="col-label">宿題</td>';
+      for(let i=0;i<7;i++) body += `<td ${dayAttrs(i)}><textarea id="${prefix}-homework-${i}" class="edit-trigger left-input" oninput="adjustFontSize(this)" ${disabled(i)}></textarea></td>`;
+      body += '</tr><tr class="row-memo"><td class="col-label">備考</td>';
+      for(let i=0;i<7;i++) body += `<td ${dayAttrs(i)}><textarea id="${prefix}-memo-${i}" class="edit-trigger left-input" oninput="adjustFontSize(this)" ${disabled(i)}></textarea></td>`;
+      body += '</tr>';
+      const headers = (data.days || []).map(function(day,i){return `<th class="day-header day-col ${hFlags[i]}" data-local-day="${i}">${escapeWeekly(day)}</th>`;}).join('');
+      const identity = [data.year+'年度',data.schoolName,data.className,data.teacherName].filter(Boolean).map(escapeWeekly).join('　');
+      return `<section class="print-container week-panel" data-week="${data.weekNum}"><table class="header-table"><tr><td style="width:25%;font-size:10px;font-weight:bold;">${identity}</td><td class="header-center">週 案</td><td style="width:35%;text-align:right;font-size:10px;color:#475569;">期間: ${escapeWeekly(data.startDate)} 〜 ${escapeWeekly(data.endDate)} (第 ${data.weekNum} 週)</td></tr></table><table class="main-table" oninput="setDirty(true)"><thead><tr><th class="col-label">校時</th>${headers}</tr></thead><tbody>${body}</tbody></table></section>`;
+    }
+
+    function renderLoadedWeeks(payload) {
+      if (payload && payload.error) { alert(payload.error); document.getElementById('loading').style.display='none'; return; }
+      displayedWeeks = payload.weeks || (payload.weekly ? [payload.weekly] : []);
+      if (!displayedWeeks.length || displayedWeeks.some(function(week){return !week || week.error;})) {
+        alert('週案データを読み込めませんでした。'); document.getElementById('loading').style.display='none'; return;
+      }
+      globalConfigList = displayedWeeks[0].colorSubjects || [];
+      const container = document.getElementById('weeksContainer');
+      container.className = 'weeks-grid' + (displayedWeeks.length === 2 ? ' two-weeks' : '');
+      container.innerHTML = displayedWeeks.map(buildWeekPanel).join('');
+      displayedWeeks.forEach(function(week) {
+        const prefix = weekPrefix(week.weekNum), t = week.timetable;
+        for(let i=0;i<7;i++) {
+          document.getElementById(`${prefix}-homework-${i}`).value = t.homework[i] || '';
+          document.getElementById(`${prefix}-memo-${i}`).value = t.memo[i] || '';
+          ['p1','p2','p3','p4','p5','p6'].forEach(function(p){document.getElementById(`${prefix}-${p}-cont-${i}`).value=(t[p][i]&&t[p][i].content)||'';});
+        }
+      });
+      document.getElementById('loading').style.display='none';
+      document.getElementById('contentArea').style.display='block';
+      updateIpadDayLabels(); setIpadDay(ipadDay,false); triggerAllFontAdjustments(); setDirty(false);
+      offerDraftRestore(currentLoadedWeek,payload.draft);
+    }
+
+    function loadWeeklyData(weekNum, prepared) {
+      currentLoadedWeek = parseInt(weekNum,10);
+      document.getElementById('loading').style.display='block';
+      document.getElementById('contentArea').style.display='none';
+      if (prepared) renderLoadedWeeks(prepared);
+      else google.script.run.withSuccessHandler(renderLoadedWeeks).withFailureHandler(function(err){
+        document.getElementById('loading').innerText='読み込みに失敗しました: '+(err.message||err);
+      }).getWeeklyPageDataRange(currentLoadedWeek,displayWeekCount);
+    }
+
+    function collectWeeklyFormData(weekNum) {
+      const prefix=weekPrefix(weekNum);
+      const single=id=>Array.from({length:7},(_,i)=>document.getElementById(`${prefix}-${id}-${i}`).value);
+      const split=id=>Array.from({length:7},(_,i)=>({subject:document.getElementById(`${prefix}-${id}-sub-${i}`).value,content:document.getElementById(`${prefix}-${id}-cont-${i}`).value}));
       return {morning:single('morning'),p1:split('p1'),p2:split('p2'),rest:single('rest'),p3:split('p3'),p4:split('p4'),lunch:single('lunch'),clean:single('clean'),recess:single('recess'),p5:split('p5'),p6:split('p6'),leaving:single('leaving'),homework:single('homework'),memo:single('memo')};
     }
 
-    function fillWeeklyForm(data, options) {
-      options=options||{}; const periods=['p1','p2','p3','p4','p5','p6'];
+    function fillWeeklyForm(data, options, weekNum) {
+      options=options||{}; weekNum=Number(weekNum)||currentLoadedWeek;
+      const prefix=weekPrefix(weekNum), periods=['p1','p2','p3','p4','p5','p6'];
       ['morning','rest','lunch','clean','recess','leaving','homework','memo'].forEach(function(key){
-        if(options.skipNotes && (key==='homework'||key==='memo')) return;
-        for(let i=0;i<7;i++){ const el=document.getElementById(key+'-'+i); if(el&&!el.disabled) el.value=(data[key]&&data[key][i])||''; }
+        if(options.skipNotes&&(key==='homework'||key==='memo'))return;
+        for(let i=0;i<7;i++){const el=document.getElementById(`${prefix}-${key}-${i}`);if(el&&!el.disabled)el.value=(data[key]&&data[key][i])||'';}
       });
-      periods.forEach(function(key){ for(let i=0;i<7;i++){ const s=document.getElementById(key+'-sub-'+i),c=document.getElementById(key+'-cont-'+i); if(s&&!s.disabled){s.value=(data[key]&&data[key][i]&&data[key][i].subject)||'';c.value=(data[key]&&data[key][i]&&data[key][i].content)||'';updateSubjectColor(s);} } });
-      triggerAllFontAdjustments(); setDirty(true);
+      periods.forEach(function(key){for(let i=0;i<7;i++){const s=document.getElementById(`${prefix}-${key}-sub-${i}`),c=document.getElementById(`${prefix}-${key}-cont-${i}`);if(s&&!s.disabled){s.value=(data[key]&&data[key][i]&&data[key][i].subject)||'';c.value=(data[key]&&data[key][i]&&data[key][i].content)||'';updateSubjectColor(s);}}});
+      triggerAllFontAdjustments();setDirty(true);
+    }
+
+    function getActiveWeekNumber() {
+      const panel = lastEditableElement && lastEditableElement.closest ? lastEditableElement.closest('.week-panel') : null;
+      return panel ? Number(panel.dataset.week) : currentLoadedWeek;
     }
 
     function openTimetableTool(){ const s=document.getElementById('toolPattern');s.innerHTML='<option value="">手動で指定</option>';(productivitySettings.patterns||[]).forEach(function(p,i){s.add(new Option(p.name||('パターン'+(i+1)),i));});document.getElementById('timetableModal').style.display='flex'; }
@@ -719,8 +719,9 @@
       const from=+document.getElementById('toolSourceStart').value, to=+document.getElementById('toolSourceEnd').value, dest=+document.getElementById('toolTargetStart').value;
       if(to<from || dest+(to-from)>6){alert('時間の範囲を確認してください。');return;}
       const overwrite=document.getElementById('toolOverwrite').checked;
+      const targetWeek=getActiveWeekNumber(), prefix=weekPrefix(targetWeek);
       const applyBase = function(base){
-        for(let p=from;p<=to;p++){ const targetP=dest+(p-from), el=document.getElementById('p'+targetP+'-sub-'+target); if(el&&!el.disabled&&(overwrite||!el.value)){el.value=(base['p'+p]&&base['p'+p][source])||'';updateSubjectColor(el);} }
+        for(let p=from;p<=to;p++){ const targetP=dest+(p-from), el=document.getElementById(prefix+'-p'+targetP+'-sub-'+target); if(el&&!el.disabled&&(overwrite||!el.value)){el.value=(base['p'+p]&&base['p'+p][source])||'';updateSubjectColor(el);} }
         setDirty(true); closeTimetableTool(); triggerAllFontAdjustments();
       };
       if(productivitySettings.defaultTimetable) applyBase(productivitySettings.defaultTimetable);
@@ -728,15 +729,16 @@
     }
 
     function copyPreviousWeek(){
-      if(currentLoadedWeek<=1){alert('第1週より前はありません。');return;}
-      if(!confirm('前週の内容を現在の週へコピーしますか？\nコピー後に確認してから保存できます。'))return;
+      const targetWeek=getActiveWeekNumber();
+      if(targetWeek<=1){alert('第1週より前はありません。');return;}
+      if(!confirm('第'+targetWeek+'週へ前週の内容をコピーしますか？\nコピー後に確認してから保存できます。'))return;
       const skipNotes=confirm('宿題・備考を除いてコピーしますか？\n［OK］除く／［キャンセル］含める');
-      google.script.run.withSuccessHandler(function(data){ if(data.error){alert(data.error);return;} fillWeeklyForm(data.timetable,{skipNotes:skipNotes}); }).getWeeklyDataByNumber(currentLoadedWeek-1);
+      google.script.run.withSuccessHandler(function(data){ if(data.error){alert(data.error);return;} fillWeeklyForm(data.timetable,{skipNotes:skipNotes},targetWeek); }).getWeeklyDataByNumber(targetWeek-1);
     }
 
     function insertQuickPhrase(){
       const current=document.activeElement;
-      let active=(current && current.closest && current.closest('#timetableBody') && /^(INPUT|TEXTAREA)$/.test(current.tagName))
+      let active=(current && current.closest && current.closest('.week-panel') && /^(INPUT|TEXTAREA)$/.test(current.tagName))
         ? current : lastEditableElement;
       if(active && !document.body.contains(active)) { lastEditableElement=null; active=null; }
       if(!active || !/^(INPUT|TEXTAREA)$/.test(active.tagName)){alert('先に、定型文を入れたい入力欄をクリックしてください。');return;}
@@ -745,28 +747,37 @@
       if(!n||!items[n-1])return; active.value+=(active.value?'\n':'')+items[n-1].text; lastEditableElement=active; active.focus(); setDirty(true); adjustFontSize(active);
     }
 
-    function validateWeekly(data){
+    function validateWeekly(data,weekNum){
       const warnings=[];
       for(let d=0;d<5;d++){
         const subjects=['p1','p2','p3','p4','p5','p6'].map(p=>data[p][d].subject).filter(Boolean);
-        if(subjects.length && !data.leaving[d]) warnings.push((d+1)+'日目：下校時刻が未入力');
-        ['p1','p2','p3','p4','p5','p6'].forEach(p=>{if(data[p][d].subject&&!data[p][d].content) warnings.push((d+1)+'日目 '+p.substring(1)+'時間目：学習内容が空欄');});
+        if(subjects.length && !data.leaving[d]) warnings.push('第'+weekNum+'週 '+(d+1)+'日目：下校時刻が未入力');
+        ['p1','p2','p3','p4','p5','p6'].forEach(p=>{if(data[p][d].subject&&!data[p][d].content) warnings.push('第'+weekNum+'週 '+(d+1)+'日目 '+p.substring(1)+'時間目：学習内容が空欄');});
       }
       return warnings.slice(0,15);
     }
 
-    function draftStorageKey(week){ return 'shuan_weekly_draft_' + week; }
+    function draftGroupKey(){ return String(currentLoadedWeek)+(displayWeekCount===2?'_2':''); }
+    function draftStorageKey(groupKey){ return 'shuan_weekly_draft_' + groupKey; }
     function saveDraftIfNeeded(localOnly){
-      if(!isDirty||!document.getElementById('p1-sub-0'))return;
-      const payload={savedAt:new Date().toISOString(),data:collectWeeklyFormData()};
-      try{localStorage.setItem(draftStorageKey(currentLoadedWeek),JSON.stringify(payload));document.getElementById('draftStatus').innerText='端末保存 '+new Date().toLocaleTimeString();}catch(e){}
-      if(!localOnly) google.script.run.withSuccessHandler(function(r){if(r&&r.success)document.getElementById('draftStatus').innerText='下書き同期 '+r.savedAt;}).saveWeeklyDraft(currentLoadedWeek,payload.data);
+      if(!isDirty||!displayedWeeks.length)return;
+      const groupKey=draftGroupKey();
+      const data={weeks:displayedWeeks.map(function(week){return {weekNum:week.weekNum,data:collectWeeklyFormData(week.weekNum)};})};
+      const payload={savedAt:new Date().toISOString(),data:data};
+      try{localStorage.setItem(draftStorageKey(groupKey),JSON.stringify(payload));document.getElementById('draftStatus').innerText='端末保存 '+new Date().toLocaleTimeString();}catch(e){}
+      if(!localOnly) google.script.run.withSuccessHandler(function(r){if(r&&r.success)document.getElementById('draftStatus').innerText='下書き同期 '+r.savedAt;}).saveWeeklyDraft(groupKey,data);
     }
     function offerDraftRestore(week, serverDraft){
-      let localDraft=null;try{localDraft=JSON.parse(localStorage.getItem(draftStorageKey(week))||'null');}catch(e){}
+      const groupKey=displayWeekCount===2?String(week)+'_2':String(week);
+      let localDraft=null;try{localDraft=JSON.parse(localStorage.getItem(draftStorageKey(groupKey))||'null');}catch(e){}
       const drafts=[localDraft,serverDraft].filter(d=>d&&d.data).sort((a,b)=>new Date(b.savedAt)-new Date(a.savedAt));
       const draft=drafts[0];
-      if(draft&&confirm('この週には '+new Date(draft.savedAt).toLocaleString()+' の下書きがあります。復元しますか？')) fillWeeklyForm(draft.data);
+      if(!draft||!confirm('この表示には '+new Date(draft.savedAt).toLocaleString()+' の下書きがあります。復元しますか？'))return;
+      if(Array.isArray(draft.data.weeks)) {
+        draft.data.weeks.forEach(function(item){if(item&&item.data)fillWeeklyForm(item.data,{},item.weekNum);});
+      } else {
+        fillWeeklyForm(draft.data,{},week);
+      }
     }
 
     function applyDefaultTimetable() {
@@ -775,11 +786,14 @@
       const applyDefault = function(defaultTimetable) {
         document.getElementById('loading').style.display = 'none';
         const periods = ["p1", "p2", "p3", "p4", "p5", "p6"];
-        periods.forEach(p => {
-          for(let i=0; i<7; i++) {
-            const inputEl = document.getElementById(`${p}-sub-${i}`);
-            if(inputEl && !inputEl.disabled) { inputEl.value = defaultTimetable[p][i]; updateSubjectColor(inputEl); }
-          }
+        displayedWeeks.forEach(function(week) {
+          const prefix=weekPrefix(week.weekNum);
+          periods.forEach(p => {
+            for(let i=0; i<7; i++) {
+              const inputEl = document.getElementById(`${prefix}-${p}-sub-${i}`);
+              if(inputEl && !inputEl.disabled) { inputEl.value = defaultTimetable[p][i]; updateSubjectColor(inputEl); }
+            }
+          });
         });
         triggerAllFontAdjustments();
         setDirty(true); 
@@ -791,23 +805,8 @@
 
     function saveToSpreadsheet() {
       document.getElementById('loading').style.display = 'block';
-      const getSingleRowValues = (idPrefix) => { let arr = []; for(let i=0; i<7; i++) { arr.push(document.getElementById(`${idPrefix}-${i}`).value); } return arr; };
-      const getSplitRowValues = (idPrefix) => {
-        let arr = [];
-        for(let i=0; i<7; i++) {
-          arr.push({ subject: document.getElementById(`${idPrefix}-sub-${i}`).value, content: document.getElementById(`${idPrefix}-cont-${i}`).value });
-        }
-        return arr;
-      };
-      const clientData = {
-        morning: getSingleRowValues('morning'),
-        p1: getSplitRowValues('p1'), p2: getSplitRowValues('p2'), rest: getSingleRowValues('rest'),
-        p3: getSplitRowValues('p3'), p4: getSplitRowValues('p4'), lunch: getSingleRowValues('lunch'),
-        clean: getSingleRowValues('clean'), recess: getSingleRowValues('recess'),
-        p5: getSplitRowValues('p5'), p6: getSplitRowValues('p6'),
-        leaving: getSingleRowValues('leaving'), homework: getSingleRowValues('homework'), memo: getSingleRowValues('memo')
-      };
-      const warnings=validateWeekly(clientData);
+      const items=displayedWeeks.map(function(week){return {weekNum:week.weekNum,colIndices:week.colIndices,data:collectWeeklyFormData(week.weekNum)};});
+      const warnings=items.reduce(function(all,item){return all.concat(validateWeekly(item.data,item.weekNum));},[]).slice(0,30);
       if(warnings.length&&!confirm('保存前の確認\n・'+warnings.join('\n・')+'\n\nこのまま保存しますか？')){document.getElementById('loading').style.display='none';return;}
       google.script.run
         .withSuccessHandler(function(result) {
@@ -819,13 +818,13 @@
           alert("保存しました！");
           setDirty(false);
           document.getElementById('draftStatus').innerText='保存済み';
-          try{localStorage.removeItem(draftStorageKey(currentLoadedWeek));}catch(e){}
+          try{localStorage.removeItem(draftStorageKey(draftGroupKey()));}catch(e){}
         })
         .withFailureHandler(function(err) {
           document.getElementById('loading').style.display = 'none';
           alert("保存に失敗しました: " + (err && err.message ? err.message : err));
         })
-        .saveWeeklyData(currentLoadedWeek, globalColIndices, clientData);
+        .saveWeeklyDataRange(items);
     }
   </script>
 </body>

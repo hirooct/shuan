@@ -259,31 +259,50 @@ function getWeeklyDataByNumber(targetWeekNum) {
 }
 
 function saveWeeklyData(weekNum, colIndices, clientData) {
+  return saveWeeklyDataRange([{weekNum:weekNum, colIndices:colIndices, data:clientData}]);
+}
+
+/** 1週間または連続する2週間を、1回の通信・1回のロックで保存する。 */
+function saveWeeklyDataRange(items) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const mainSheet = ss.getSheetByName("週案") || ss.getSheets()[0];
   if (!mainSheet) return { error: "シートが見つかりません。" };
 
+  const targets = Array.isArray(items) ? items.slice(0,2) : [];
+  if (!targets.length) return {error:'保存する週のデータがありません。'};
+
   const lock = LockService.getDocumentLock();
   try {
     lock.waitLock(10000);
-    const columns = (colIndices || []).map(Number);
-    if (columns.length !== 7 || columns.some((col, i) => !Number.isInteger(col) || col < 0 || (i && col !== columns[0] + i))) {
-      return { error: '保存対象の列情報が正しくありません。' };
-    }
     const rowKeys = [
       ['single','morning'], ['subject','p1'], ['content','p1'], ['subject','p2'], ['content','p2'],
       ['single','rest'], ['subject','p3'], ['content','p3'], ['subject','p4'], ['content','p4'],
       ['single','lunch'], ['single','clean'], ['single','recess'], ['subject','p5'], ['content','p5'],
       ['subject','p6'], ['content','p6'], ['single','leaving'], ['single','homework'], ['single','memo']
     ];
-    const values = rowKeys.map(([kind, key]) => Array.from({ length: 7 }, (_, i) => {
-      if (kind === 'single') return (clientData[key] || [])[i] || '';
-      const cell = (clientData[key] || [])[i] || {};
-      return cell[kind] || '';
-    }));
-    mainSheet.getRange(12, columns[0] + 1, 20, 7).setValues(values);
-    PropertiesService.getUserProperties().deleteProperty('WEEKLY_DRAFT_' + String(weekNum));
-    return { success: true };
+    const prepared = targets.map(function(item) {
+      const columns = (item.colIndices || []).map(Number);
+      if (columns.length !== 7 || columns.some((col, i) => !Number.isInteger(col) || col < 0 || (i && col !== columns[0] + i))) {
+        throw new Error('第' + String(item.weekNum || '') + '週の保存対象列が正しくありません。');
+      }
+      const data = item.data || {};
+      const values = rowKeys.map(function(pair) {
+        const kind = pair[0], key = pair[1];
+        return Array.from({length:7}, function(_, i) {
+          if (kind === 'single') return (data[key] || [])[i] || '';
+          const cell = (data[key] || [])[i] || {};
+          return cell[kind] || '';
+        });
+      });
+      return {weekNum:Number(item.weekNum), columns:columns, values:values};
+    });
+    prepared.forEach(function(item) {
+      mainSheet.getRange(12,item.columns[0]+1,20,7).setValues(item.values);
+    });
+    const props = PropertiesService.getUserProperties();
+    prepared.forEach(function(item) { props.deleteProperty('WEEKLY_DRAFT_' + String(item.weekNum)); });
+    if (prepared.length === 2) props.deleteProperty('WEEKLY_DRAFT_' + String(prepared[0].weekNum) + '_2');
+    return {success:true, savedWeeks:prepared.map(function(item){return item.weekNum;})};
   } catch(e) {
     return { error: e.toString() };
   } finally {
@@ -305,6 +324,21 @@ function getWeeklyPageInitialData() {
 
 function getWeeklyPageData(weekNum) {
   return { weekly: getWeeklyDataByNumber(weekNum), draft: getWeeklyDraft(weekNum) };
+}
+
+/** 2週間表示用。通信は1回のまま、各週は既存の安全な7日単位で取得する。 */
+function getWeeklyPageDataRange(startWeekNum, count) {
+  const start = Math.max(1,Math.min(52,Number(startWeekNum)||1));
+  const weekCount = Number(count) === 2 ? 2 : 1;
+  if (weekCount === 2 && start > 51) return {error:'2週間表示は第51週までを開始週に指定してください。'};
+  const weeks = [];
+  for (let i=0; i<weekCount; i++) {
+    const data = getWeeklyDataByNumber(start+i);
+    if (data && data.error) return data;
+    weeks.push(data);
+  }
+  const draftKey = weekCount === 2 ? String(start) + '_2' : String(start);
+  return {weeks:weeks, draft:getWeeklyDraft(draftKey)};
 }
 
 // Webアプリから行事・休日を設定シートの最後に追加する関数
