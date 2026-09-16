@@ -172,7 +172,7 @@ function loadTsushinData() {
   const sheet = ss.getSheetByName("通信データ");
   if (!sheet) return {};
   
-  const v = sheet.getRange('B1:B33').getValues().map(function(row) { return row[0]; });
+  const v = sheet.getRange('B1:B34').getValues().map(function(row) { return row[0]; });
   const result = { issue:v[0], columnTitle:v[1], columnBody:v[2], notice:v[3], qrRentaku:v[4], qrHomework:v[5],
     upperType:v[6]||'table', upperColTitle:v[7]||'上段コラム', upperColBody:v[8]||'', lowerType:v[9]||'table',
     lowerColTitle:v[10]||'下段コラム', lowerColBody:v[11]||'', photoCaption:v[12]||'', upperWeek:v[13]||'11',
@@ -184,7 +184,7 @@ function loadTsushinData() {
       upperHasPhoto:v[24]===true, upperPhotoCaption:v[25]||'', showLunchDuty:v[26]!==false,
       theme:v[27]||'#1f3a5f,#e8eef7', photoTransform:parseTsushinJson_(v[28], {zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'}),
       upperPhotoTransform:parseTsushinJson_(v[29], {zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'}),
-      photoFileId:v[30]||'', upperPhotoFileId:v[31]||''});
+      photoFileId:v[30]||'', upperPhotoFileId:v[31]||'', pageMarginMm:normalizeTsushinMargin_(v[33])});
   }
   return result;
 }
@@ -230,6 +230,7 @@ function saveTsushinData(data) {
       className:data.className||'', upperTitle:data.upperTitle||'', lowerTitle:data.lowerTitle||'',
       upperHasPhoto:data.upperHasPhoto===true, upperPhotoCaption:data.upperPhotoCaption||'',
       showLunchDuty:data.showLunchDuty!==false, theme:data.theme||'#1f3a5f,#e8eef7',
+      pageMarginMm:normalizeTsushinMargin_(data.pageMarginMm),
       photoTransform:data.photoTransform||{zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'},
       upperPhotoTransform:data.upperPhotoTransform||{zoom:'1',x:'0',y:'0',shape:'free',width:'40',height:'160'},
       photoFileId:photoFileId, upperPhotoFileId:upperPhotoFileId
@@ -242,8 +243,8 @@ function saveTsushinData(data) {
       normalized.mainTitle,normalized.className,normalized.upperTitle,normalized.lowerTitle,
       normalized.upperHasPhoto,normalized.upperPhotoCaption,normalized.showLunchDuty,normalized.theme,
       JSON.stringify(normalized.photoTransform),JSON.stringify(normalized.upperPhotoTransform),
-      normalized.photoFileId,normalized.upperPhotoFileId,2].map(function(value){return [value];});
-    sheet.getRange('B1:B33').setValues(values);
+      normalized.photoFileId,normalized.upperPhotoFileId,2,normalized.pageMarginMm].map(function(value){return [value];});
+    sheet.getRange('B1:B34').setValues(values);
     SpreadsheetApp.flush();
     const archiveResult = upsertTsushinArchive_(normalized);
     return {
@@ -261,6 +262,11 @@ function saveTsushinData(data) {
 function parseTsushinJson_(value, fallback) {
   if (!value) return fallback;
   try { return JSON.parse(String(value)); } catch (e) { return fallback; }
+}
+
+function normalizeTsushinMargin_(value) {
+  const margin = Number(value);
+  return Math.min(25, Math.max(5, isFinite(margin) && margin ? margin : 10));
 }
 
 function getTsushinPhotoFolder_() {
