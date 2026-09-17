@@ -282,7 +282,16 @@ function getTsushinPhotoFolder_() {
     const parents = DriveApp.getFileById(ss.getId()).getParents();
     if (parents.hasNext()) parent = parents.next();
   } catch (e) { /* 共有ドライブ等ではマイドライブ直下を使用 */ }
-  const folder = parent.createFolder(folderName);
+  let folder;
+  try {
+    folder = parent.createFolder(folderName);
+  } catch (e) {
+    const message = String(e && e.message ? e.message : e);
+    if (/権限|permission|authoriz|scope/i.test(message)) {
+      throw new Error('写真を保存するためのGoogleドライブ権限が未承認です。GASエディタで authorizeShuanApp を1回実行して権限を許可し、ウェブアプリを再デプロイしてください。');
+    }
+    throw e;
+  }
   props.setProperty('TSUSHIN_PHOTO_FOLDER_ID', folder.getId());
   return folder;
 }

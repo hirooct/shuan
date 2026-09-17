@@ -1,9 +1,25 @@
 /**
  * 配付・初期設定・保守機能
  */
-var SHUAN_APP_VERSION = '3.10.0';
+var SHUAN_APP_VERSION = '3.10.1';
 var SHUAN_APP_UPDATED_AT = '2026-09-16';
 var SHUAN_RESET_CONFIRM_TEXT = '初期化する';
+
+/**
+ * 初回導入時や権限追加後にGASエディタから1回実行し、
+ * 週案・写真・カレンダー同期・トリガーに必要な権限をまとめて承認する。
+ */
+function authorizeShuanApp() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error('このスクリプトを週案スプレッドシートから開いて実行してください。');
+  DriveApp.getRootFolder().getId();
+  CalendarApp.getAllCalendars().length;
+  ScriptApp.getProjectTriggers().length;
+  return {
+    ok: true,
+    message: '必要な権限を確認できました。ウェブアプリを再デプロイしてください。'
+  };
+}
 
 function getAppVersionInfo() {
   return {
