@@ -20,6 +20,8 @@
   
   .side { background: #fff; padding: 24px; border-right: 1px solid #d8dee8; height: 100vh; overflow-y: auto; position: sticky; top: 0; font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif; }
   .side h1 { font-size: 18px; color: var(--theme-color, #1f3a5f); margin-top: 0; margin-bottom: 20px; border-bottom: 2px solid var(--theme-color, #1f3a5f); padding-bottom: 8px; transition: all 0.3s; }
+  .weeklyPlannerLink { display: flex; align-items: center; justify-content: center; width: 100%; margin: -8px 0 16px; padding: 10px 12px; border: 1px solid #2563eb; border-radius: 10px; background: #eff6ff; color: #1d4ed8; font-size: 13px; font-weight: bold; text-decoration: none; }
+  .weeklyPlannerLink:hover { background: #dbeafe; }
   .panel { margin-bottom: 20px; padding: 16px; border: 1px solid #dde5f0; border-radius: 12px; background: #f8fbff; }
   .panel[data-editor-tab] { display: none; }
   .panel[data-editor-tab].tab-active { display: block; }
@@ -181,7 +183,7 @@
   body.ipad-ui[data-ipad-view="preview"] .paper { width: min(100%, 210mm); height: auto; min-height: min(297mm, calc((100vw - 24px) * 1.414)); padding: var(--tsushin-margin, 10mm); box-shadow: 0 6px 24px rgba(15,23,42,.12); }
 
   @media print {
-    .ipadViewBar { display: none !important; }
+    .ipadViewBar, .weeklyPlannerLink { display: none !important; }
     body { background: white; }
     .side { display: none; }
     .app { display: block; }
@@ -205,6 +207,7 @@
 
   <aside class="side">
     <h1>学級通信作成Webアプリ</h1>
+    <a class="weeklyPlannerLink" href="<?= getScriptUrl(); ?>?p=WeeklyPrint" target="_blank" rel="noopener">📅 週案を別ウインドウで開く</a>
 
     <nav class="editorTabs" aria-label="編集項目">
       <button type="button" class="editorTab active" data-tab="basic" onclick="selectEditorTab('basic')">基本</button>

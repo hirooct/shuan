@@ -232,6 +232,11 @@ function getWeeklyDataByNumber(targetWeekNum) {
     endDate: (weekDates[6].getMonth() + 1) + "月" + weekDates[6].getDate() + "日",
     weekNum: targetWeekNum,
     days: weekDates.map((d, idx) => `${d.getMonth() + 1}/${d.getDate()}(${dayLabels[idx]})`),
+    dateValues: weekDates.map(d => Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd')),
+    lunchDuty: (function(value) {
+      const normalized = String(value || '').trim().replace(/当番$/, '');
+      return normalized === 'A' || normalized === 'B' ? normalized : '';
+    })(mainData[8][0]),
     holidayRow: getRowCells(7),
     dropdownSubjects: staticSettings.subjects,
     colorSubjects: staticSettings.colorSubjects,
@@ -286,6 +291,11 @@ function saveWeeklyDataRange(items) {
         throw new Error('第' + String(item.weekNum || '') + '週の保存対象列が正しくありません。');
       }
       const data = item.data || {};
+      const hasLunchDuty = Object.prototype.hasOwnProperty.call(data, 'lunchDuty');
+      const lunchDuty = String(data.lunchDuty || '').trim().replace(/当番$/, '');
+      if (hasLunchDuty && lunchDuty !== '' && lunchDuty !== 'A' && lunchDuty !== 'B') {
+        throw new Error('第' + String(item.weekNum || '') + '週の給食当番はAまたはBを選んでください。');
+      }
       const values = rowKeys.map(function(pair) {
         const kind = pair[0], key = pair[1];
         return Array.from({length:7}, function(_, i) {
@@ -294,10 +304,11 @@ function saveWeeklyDataRange(items) {
           return cell[kind] || '';
         });
       });
-      return {weekNum:Number(item.weekNum), columns:columns, values:values};
+      return {weekNum:Number(item.weekNum), columns:columns, values:values, hasLunchDuty:hasLunchDuty, lunchDuty:lunchDuty};
     });
     prepared.forEach(function(item) {
       mainSheet.getRange(12,item.columns[0]+1,20,7).setValues(item.values);
+      if (item.hasLunchDuty) mainSheet.getRange(9,item.columns[0]+1).setValue(item.lunchDuty);
     });
     const props = PropertiesService.getUserProperties();
     prepared.forEach(function(item) { props.deleteProperty('WEEKLY_DRAFT_' + String(item.weekNum)); });
