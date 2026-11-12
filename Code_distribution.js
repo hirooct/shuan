@@ -1,8 +1,8 @@
 /**
  * 配付・初期設定・保守機能
  */
-var SHUAN_APP_VERSION = '3.12.0';
-var SHUAN_APP_UPDATED_AT = '2026-10-08';
+var SHUAN_APP_VERSION = '3.13.0';
+var SHUAN_APP_UPDATED_AT = '2026-11-12';
 var SHUAN_RESET_CONFIRM_TEXT = '初期化する';
 
 /**
