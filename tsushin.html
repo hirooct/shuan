@@ -20,6 +20,7 @@
   
   .side { background: #fff; padding: 24px; border-right: 1px solid #d8dee8; height: 100vh; overflow-y: auto; position: sticky; top: 0; font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif; }
   .side h1 { font-size: 18px; color: var(--theme-color, #1f3a5f); margin-top: 0; margin-bottom: 20px; border-bottom: 2px solid var(--theme-color, #1f3a5f); padding-bottom: 8px; transition: all 0.3s; }
+  .appVersionBadge { margin: -12px 0 12px; color: #64748b; font-size: 11px; text-align: right; }
   .weeklyPlannerLink { display: flex; align-items: center; justify-content: center; width: 100%; margin: -8px 0 16px; padding: 10px 12px; border: 1px solid #2563eb; border-radius: 10px; background: #eff6ff; color: #1d4ed8; font-size: 13px; font-weight: bold; text-decoration: none; }
   .weeklyPlannerLink:hover { background: #dbeafe; }
   .panel { margin-bottom: 20px; padding: 16px; border: 1px solid #dde5f0; border-radius: 12px; background: #f8fbff; }
@@ -126,7 +127,7 @@
   
   .event-cell { background-color: #fff; }
   .period-cell { background-color: #fff; overflow: hidden; white-space: nowrap; padding: 3px 2px; }
-  .period-text { display: inline-block; max-width: 100%; white-space: nowrap; line-height: 1.15; transform-origin: center center; }
+  .period-text { display: inline-block; white-space: nowrap; line-height: 1.15; transform-origin: center center; }
   .dismissal-cell { background-color: #e2e8f0 !important; color: #0f172a !important; font-weight: 700 !important; } 
   .homework-cell { background-color: #f8fafc !important; text-align: left !important; padding-left: 5px !important; white-space: pre-wrap; } 
   .holiday-col { background-color: var(--bg-color, #e8eef7) !important; color: #71717a !important; font-weight: normal !important; }
@@ -139,11 +140,13 @@
   .noticeList { font-size: 13px; line-height: 1.5; margin: 0; padding-left: 18px; color: #222; }
   .noticeList li { margin-bottom: 4px; }
 
-  .bottom-layout { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 8px; align-items: stretch; margin-top: 6px; flex-grow: 1; }
+  .bottom-layout { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 6px; align-items: stretch; margin-top: 6px; flex-grow: 1; }
   .bottom-left-table { display: flex; flex-direction: column; height: 100%; flex-grow: 1; }
   #followingWeekTable { flex-grow: 1; }
+  #followingWeekTable .period-cell { overflow: hidden !important; padding: 2px 1px !important; white-space: nowrap !important; word-break: keep-all !important; font-size: 9px !important; line-height: 1 !important; }
+  #followingWeekTable .period-text { display: block; width: max-content; max-width: none; margin: 0 auto; white-space: nowrap !important; word-break: keep-all !important; line-height: 1 !important; }
   
-  .bottom-right-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 0; height: 100%; } 
+  .bottom-right-panel { display: flex; flex-direction: column; min-width: 0; gap: 6px; margin-top: 0; height: 100%; }
   .duty-box { border: 1.5px solid var(--theme-color, #1f3a5f); border-radius: 6px; padding: 5px; text-align: center; background: #fff; transition: background-color 0.2s; }
   .duty-box.hide-duty { display: none !important; }
   .duty-title { font-size: 13px; font-weight: bold; color: #64748b; margin-bottom: 3px; font-family: "BIZ UDGothic", sans-serif; }
@@ -157,7 +160,7 @@
   .qr-block:first-child:not(.qr-hide) { border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px; }
   .qr-label { font-size: 13px; font-weight: bold; color: #475569; margin-bottom: 4px; font-family: "BIZ UDGothic", sans-serif; }
   .qr-code img { width: 50px; height: 50px; object-fit: contain; display: block; margin: 0 auto; }
-  .qr-note { font-size: 8px; font-weight: bold; color: #e11d48; text-align: center; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbd5e1; white-space: nowrap; font-family: "BIZ UDGothic", sans-serif; }
+  .qr-note { font-size: 7.5px; line-height: 1.25; font-weight: bold; color: #e11d48; text-align: center; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbd5e1; overflow-wrap: anywhere; font-family: "BIZ UDGothic", sans-serif; }
   .qr-container.qr-all-hide { display: none !important; } 
 
   .hidden-input { display: none !important; }
@@ -191,7 +194,7 @@
   body.ipad-ui[data-ipad-view="preview"] .paper { width: min(100%, 210mm); height: auto; min-height: min(297mm, calc((100vw - 24px) * 1.414)); padding: var(--tsushin-margin, 10mm); box-shadow: 0 6px 24px rgba(15,23,42,.12); }
 
   @media print {
-    .ipadViewBar, .weeklyPlannerLink { display: none !important; }
+    .ipadViewBar, .weeklyPlannerLink, .appVersionBadge { display: none !important; }
     body { background: white; }
     .side { display: none; }
     .app { display: block; }
@@ -215,6 +218,7 @@
 
   <aside class="side">
     <h1>学級通信作成Webアプリ</h1>
+    <div class="appVersionBadge">アプリ v<?= getAppVersionInfo().version ?></div>
     <a class="weeklyPlannerLink" href="<?= getScriptUrl(); ?>?p=WeeklyPrint" target="_blank" rel="noopener">📅 週案を別ウインドウで開く</a>
 
     <nav class="editorTabs" aria-label="編集項目">
@@ -1181,17 +1185,17 @@ function adjustScheduleFontSize() {
   cells.forEach(cell => {
     const textSpan = cell.querySelector('.period-text');
     if (!textSpan) return;
-    const baseSize = 13;
-    const minSize = 7.5;
+    const baseSize = 9;
+    const minSize = 6.5;
     textSpan.style.fontSize = baseSize + 'px';
     textSpan.style.transform = 'scaleX(1)';
-    const availableWidth = Math.max(0, cell.clientWidth - 5);
+    const availableWidth = Math.max(0, cell.clientWidth - 3);
     const textWidth = textSpan.scrollWidth;
     if (textWidth > availableWidth && availableWidth > 0) {
       const fittedSize = Math.floor((availableWidth / textWidth) * baseSize * 10) / 10;
       const fontSize = Math.max(minSize, fittedSize);
       textSpan.style.fontSize = fontSize + 'px';
-      if (fittedSize < minSize) textSpan.style.transform = `scaleX(${Math.max(.1, fittedSize / minSize)})`;
+      if (fittedSize < minSize) textSpan.style.transform = `scaleX(${Math.max(.25, fittedSize / minSize)})`;
     }
   });
 }
@@ -1518,7 +1522,12 @@ document.getElementById('pageMarginInput').addEventListener('change', function()
 });
 window.addEventListener('resize', () => { adjustTsushinTableFonts(); applyTsushinIpadMode(); scheduleLayoutStatus(); });
 window.addEventListener('beforeprint', () => { adjustTsushinTableFonts(); updateLayoutStatus(); });
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleLayoutStatus);
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    adjustTsushinTableFonts();
+    scheduleLayoutStatus();
+  });
+}
 
 applyTsushinIpadMode();
 initWeekSelects();
